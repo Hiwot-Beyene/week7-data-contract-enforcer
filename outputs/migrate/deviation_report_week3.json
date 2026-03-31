@@ -1,0 +1,110 @@
+{
+  "file": "outputs/week3/extractions.jsonl",
+  "record_count": 58,
+  "deviations": [
+    {
+      "field": "timestamp vs extracted_at",
+      "canonical_type": "string (ISO8601 Z)",
+      "actual_type": "string key \"timestamp\"",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 58,
+      "note": "Rename timestamp → extracted_at; values already use Z suffix."
+    },
+    {
+      "field": "document_name vs source_path",
+      "canonical_type": "string (absolute path or https URL)",
+      "actual_type": "string filename / relative document_name",
+      "severity": "COMPATIBLE",
+      "action": "rename",
+      "records_affected": 58,
+      "note": "Canonical prefers absolute path; filename-only is preserved as source_path with documented approximation."
+    },
+    {
+      "field": "confidence_score",
+      "canonical_type": "float inside extracted_facts[*].confidence",
+      "actual_type": "float at top level",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 58,
+      "note": "Migrated into a single legacy summary fact per record; not a substitute for real multi-fact extraction."
+    },
+    {
+      "field": "strategy_sequence, final_strategy, budget_cap_usd, budget_status, cost_estimate_usd, notes",
+      "canonical_type": "absent",
+      "actual_type": "present",
+      "severity": "COMPATIBLE",
+      "action": "document_only",
+      "records_affected": 58,
+      "note": "Omitted from migrated envelope; described in migration script docstring only."
+    },
+    {
+      "field": "prompt_tokens / completion_tokens",
+      "canonical_type": "token_count.input / token_count.output",
+      "actual_type": "nullable top-level ints (late records only)",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 9,
+      "note": "Fold into token_count; null stays null (unknown counts)."
+    },
+    {
+      "field": "doc_id",
+      "canonical_type": "uuid-v4 string",
+      "actual_type": "16-char hex or invalid literal \"doc123\"",
+      "severity": "BREAKING",
+      "action": "quarantine | cast",
+      "records_affected": 58,
+      "note": "\"doc123\" rows quarantined. Valid hex ids become deterministic UUID5 (not RFC-4122 v4 random)."
+    },
+    {
+      "field": "source_hash",
+      "canonical_type": "string (sha256)",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 58,
+      "note": "No hash in export; null with documented unknown."
+    },
+    {
+      "field": "extracted_facts",
+      "canonical_type": "array of fact objects",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "cast",
+      "records_affected": 58,
+      "note": "Emit one explicit legacy summary fact carrying former top-level confidence_score (not multi-fact extraction)."
+    },
+    {
+      "field": "entities",
+      "canonical_type": "array",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 58,
+      "note": "Empty array []; no entity extraction in source."
+    },
+    {
+      "field": "extraction_model",
+      "canonical_type": "string",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 58,
+      "note": "Unknown model id in source export."
+    },
+    {
+      "field": "processing_time_ms",
+      "canonical_type": "positive integer",
+      "actual_type": "integer (0 only on test rows)",
+      "severity": "BREAKING",
+      "action": "quarantine",
+      "records_affected": 2,
+      "note": "Non-positive values coincide with doc123 quarantine; no separate rule needed for migrated rows."
+    }
+  ],
+  "migration_summary": {
+    "migrated": 56,
+    "quarantined": 2,
+    "target": "outputs/migrate/migrated_extractions.jsonl"
+  }
+}

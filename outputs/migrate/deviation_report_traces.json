@@ -1,0 +1,123 @@
+{
+  "file": "outputs/traces/runs.jsonl",
+  "record_count": 1,
+  "deviations": [
+    {
+      "field": "file format",
+      "canonical_type": "jsonl (one trace_record per line)",
+      "actual_type": "single pretty-printed JSON object (multi-line)",
+      "severity": "BREAKING",
+      "action": "document_only",
+      "records_affected": 1,
+      "note": "Reader loads whole file as one JSON value; writer emits one compact JSONL line."
+    },
+    {
+      "field": "id",
+      "canonical_type": "uuid string",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Deterministic UUID5 over canonicalized JSON fingerprint (not LangSmith's native run id — absent from export)."
+    },
+    {
+      "field": "name",
+      "canonical_type": "string (chain or LLM name)",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Derived from langsmith.tracing_project.name + session_id suffix when present."
+    },
+    {
+      "field": "run_type",
+      "canonical_type": "enum llm|chain|tool|retriever|embedding",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Set to \"chain\" — orchestrator-style inputs/outputs graph; not measured from exporter."
+    },
+    {
+      "field": "error",
+      "canonical_type": "string | null",
+      "actual_type": "missing",
+      "severity": "COMPATIBLE",
+      "action": "set_null",
+      "records_affected": 1,
+      "note": "Explicit null (no error field in source)."
+    },
+    {
+      "field": "start_time, end_time",
+      "canonical_type": "ISO8601 Z strings, end > start",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 1,
+      "note": "Not present in this export; null — cannot satisfy end_time > start_time until backfilled."
+    },
+    {
+      "field": "total_tokens, prompt_tokens, completion_tokens",
+      "canonical_type": "integers with total = prompt + completion",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 1,
+      "note": "Not in source blob; null — do not fabricate token counts."
+    },
+    {
+      "field": "total_cost",
+      "canonical_type": "float USD >= 0",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 1,
+      "note": "Unknown spend; null rather than 0.0 (would imply measured zero)."
+    },
+    {
+      "field": "tags",
+      "canonical_type": "array of strings",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Built from LANGSMITH_PROJECT and tracing project name when present."
+    },
+    {
+      "field": "parent_run_id",
+      "canonical_type": "uuid | null",
+      "actual_type": "missing",
+      "severity": "COMPATIBLE",
+      "action": "set_null",
+      "records_affected": 1,
+      "note": "Explicit null (no parent in export)."
+    },
+    {
+      "field": "session_id",
+      "canonical_type": "uuid string",
+      "actual_type": "string e.g. sess-dec-057c94ad",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "UUID5(namespace, raw session string) for stable canonical-compatible id."
+    },
+    {
+      "field": "top-level metadata.revision_id",
+      "canonical_type": "n/a on trace_record",
+      "actual_type": "401e57e-dirty",
+      "severity": "COMPATIBLE",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Preserved under inputs._migration_source_envelope.metadata; \"-dirty\" suffix stripped in copy (dirty flag documented)."
+    },
+    {
+      "field": "top-level langsmith subtree",
+      "canonical_type": "n/a on trace_record",
+      "actual_type": "organization/workspace/tracing_project",
+      "severity": "COMPATIBLE",
+      "action": "rename",
+      "records_affected": 1,
+      "note": "Embedded under inputs._migration_source_envelope.langsmith so nothing is dropped."
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "file": "outputs/week5/events.jsonl",
+  "record_count": 121,
+  "upcaster_notes": "CreditAnalysisCompleted v2 events with null denormalized top-level fields (confidence_score, risk_tier, recommended_limit_usd) require UpcasterRegistry entry — see contracts/upcasters.py (read-time upcasting, not one-shot migration).",
+  "deviations": [
+    {
+      "field": "envelope shape",
+      "canonical_type": "event_id, aggregate_id, aggregate_type, sequence_number, metadata{}, schema_version, occurred_at, recorded_at",
+      "actual_type": "stream_id, event_version, payload, recorded_at only",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 121,
+      "note": "stream_id dropped from migrated top-level (recover from source). event_id deterministic UUID5 per line identity. aggregate_id UUID5(application_id) or stream_id fallback."
+    },
+    {
+      "field": "metadata",
+      "canonical_type": "{causation_id, correlation_id, user_id, source_service}",
+      "actual_type": "absent",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 121,
+      "note": "correlation_id = UUID5(namespace, session_id or stream_id). causation_id and user_id null. source_service constant documented in script."
+    },
+    {
+      "field": "schema_version",
+      "canonical_type": "string e.g. 1.0",
+      "actual_type": "missing (event_version used instead)",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 121,
+      "note": "schema_version set to \"1.0\"; event_version not part of canonical envelope — see upcaster note."
+    },
+    {
+      "field": "payload monetary strings",
+      "canonical_type": "number for USD amounts where schema expects number",
+      "actual_type": "string digits for requested_amount_usd, approved_amount_usd, decision.recommended_limit_usd",
+      "severity": "BREAKING",
+      "action": "cast",
+      "records_affected": 9,
+      "note": "float() after strip; failure → quarantine."
+    },
+    {
+      "field": "CreditAnalysisCompleted v2 denormalized nulls",
+      "canonical_type": "populated v2 mirror fields",
+      "actual_type": "event_version 2 with confidence_score, risk_tier, recommended_limit_usd null at payload top; values live under decision{}",
+      "severity": "BREAKING",
+      "action": "document_only",
+      "records_affected": 4,
+      "note": "requires UpcasterRegistry entry — see contracts/upcasters.py (read-time); migration does not fabricate denormalized fields."
+    },
+    {
+      "field": "metadata.revision_id dirty SHA",
+      "canonical_type": "40-char hex",
+      "actual_type": "not present in this export",
+      "severity": "COMPATIBLE",
+      "action": "document_only",
+      "records_affected": 0,
+      "note": "User-reported field absent from outputs/week5/events.jsonl; no strip migration applied."
+    },
+    {
+      "field": "recorded_at vs occurred_at timezone style",
+      "canonical_type": "ISO8601 with consistent offset or Z",
+      "actual_type": "recorded_at uses +00:00; many payload *at fields lack timezone",
+      "severity": "UNKNOWN",
+      "action": "rename",
+      "records_affected": 121,
+      "note": "recorded_at normalized to Z. occurred_at uses first timezone-aware payload timestamp, else falls back to recorded_at with documented approximation."
+    },
+    {
+      "field": "sequence_number monotonicity",
+      "canonical_type": "strictly increasing per aggregate_id",
+      "actual_type": "missing",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 121,
+      "note": "Assigned after global sort by (recorded_at, source line index) within each aggregate bucket."
+    }
+  ],
+  "migration_summary": {
+    "migrated": 121,
+    "quarantined": 0,
+    "target": "outputs/migrate/migrated_events.jsonl"
+  }
+}

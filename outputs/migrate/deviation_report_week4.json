@@ -1,0 +1,71 @@
+{
+  "file": "outputs/week4/lineage_snapshots.jsonl",
+  "record_count": 1,
+  "deviations": [
+    {
+      "field": "file format",
+      "canonical_type": "jsonl (one snapshot per line)",
+      "actual_type": "single pretty-printed JSON spanning multiple lines",
+      "severity": "BREAKING",
+      "action": "document_only",
+      "records_affected": 1,
+      "note": "Reader treats whole file as one JSON object; writer emits one compact JSONL line."
+    },
+    {
+      "field": "nodes[*].node_id (pipeline/file-style)",
+      "canonical_type": "type::path relative to codebase_root",
+      "actual_type": "absolute filesystem paths after type::",
+      "severity": "BREAKING",
+      "action": "rename",
+      "records_affected": 7,
+      "note": "Relativize using snapshot codebase_root via pathlib.Path.relative_to when possible."
+    },
+    {
+      "field": "nodes[*].metadata",
+      "canonical_type": "{path, language, purpose, last_modified}",
+      "actual_type": "often only path (TABLE); PIPELINE has partial fields",
+      "severity": "BREAKING",
+      "action": "set_null",
+      "records_affected": 18,
+      "note": "Missing keys set to null; not invented."
+    },
+    {
+      "field": "edges[*].relationship",
+      "canonical_type": "enum IMPORTS|CALLS|READS|WRITES|PRODUCES|CONSUMES",
+      "actual_type": "CONSUMES only",
+      "severity": "COMPATIBLE",
+      "action": "document_only",
+      "records_affected": 16,
+      "note": "Values are valid enum members; lack of PRODUCES/WRITES is a capture gap, not fixed by migration."
+    },
+    {
+      "field": "edges[*].confidence",
+      "canonical_type": "float",
+      "actual_type": "constant 0.95",
+      "severity": "UNKNOWN",
+      "action": "document_only",
+      "records_affected": 16,
+      "note": "Kept as-is; likely default, not measured."
+    },
+    {
+      "field": "table node_id / label",
+      "canonical_type": "stable table identifier",
+      "actual_type": "some nodes use FK constraint names (e.g. tasks_run_id_runs_id_fk)",
+      "severity": "UNKNOWN",
+      "action": "document_only",
+      "records_affected": 5,
+      "note": "Semantic accuracy requires manual remap in cartography tooling."
+    },
+    {
+      "field": "duplicate table identities",
+      "canonical_type": "unique node_id per asset",
+      "actual_type": "table::public.runs vs table::runs both present",
+      "severity": "COMPATIBLE",
+      "action": "document_only",
+      "records_affected": 2,
+      "note": "Both kept; consumers must dedupe or reconcile."
+    }
+  ],
+  "migration_applied": true,
+  "target": "outputs/migrate/migrated_lineage_snapshots.jsonl"
+}
