@@ -1,0 +1,281 @@
+kind: DataContract
+apiVersion: v3.0.0
+id: week5-event-sourcing-events
+info:
+  title: Week 5 Event Sourcing — Event Records (migrated)
+  version: 1.0.0
+  owner: week5-team
+  description: Canonical envelope events; inputs from outputs/migrate/migrated_events.jsonl.
+servers:
+  local:
+    type: local
+    path: outputs/migrate/migrated_events.jsonl
+    format: jsonl
+    note: Uses post-migration contract-aligned JSONL under outputs/migrate/.
+terms:
+  usage: Internal inter-system data contract. Do not publish raw exports.
+  limitations: Profiling reflects migrated snapshot only; regenerate after migrations.
+schema:
+  event_id:
+    type: string
+    format: uuid
+    required: true
+  event_type:
+    type: string
+    required: true
+    description: PascalCase event name.
+  aggregate_id:
+    type: string
+    format: uuid
+    required: true
+  aggregate_type:
+    type: string
+    required: true
+  sequence_number:
+    type: integer
+    minimum: 1
+    required: true
+  payload:
+    type: object
+    required: true
+  metadata:
+    type: object
+    required: true
+    properties:
+      causation_id:
+        type: string
+        required: false
+      correlation_id:
+        type: string
+        format: uuid
+        required: true
+      user_id:
+        type: string
+        required: false
+      source_service:
+        type: string
+        required: true
+  schema_version:
+    type: string
+    required: true
+  occurred_at:
+    type: string
+    format: date-time
+    required: true
+  recorded_at:
+    type: string
+    format: date-time
+    required: true
+profiling:
+  engine: ydata-profiling
+  generated_at: '2026-04-01T21:27:52Z'
+  structural:
+    ydata_profiling:
+      status: ok
+      dataset: week5_events
+      alerts: []
+      variable_count: 0
+    columns:
+    - name: event_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 121
+      distinct_shape_samples:
+      - string(len=36,sha8=c6b33eae)
+      - string(len=36,sha8=6885fc76)
+      - string(len=36,sha8=372bd2b7)
+      - string(len=36,sha8=c1d40e15)
+      - string(len=36,sha8=1e3d9207)
+      dominant_character_pattern: uuid_like
+    - name: event_type
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 33
+      distinct_shape_samples:
+      - string(len=20,sha8=1b6009cb)
+      - string(len=23,sha8=f5803b75)
+      - string(len=16,sha8=740011a6)
+      - string(len=19,sha8=b4883320)
+      - string(len=19,sha8=223f075e)
+      dominant_character_pattern: free_text
+    - name: aggregate_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 4
+      distinct_shape_samples:
+      - string(len=36,sha8=72028e31)
+      - string(len=36,sha8=a9d89444)
+      - string(len=36,sha8=bf80aade)
+      - string(len=36,sha8=fe955bbc)
+      dominant_character_pattern: uuid_like
+    - name: aggregate_type
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 2
+      distinct_shape_samples:
+      - string(len=15,sha8=583da6c3)
+      - string(len=15,sha8=cc0b141d)
+      dominant_character_pattern: free_text
+    - name: sequence_number
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 50
+      distinct_shape_samples:
+      - int64
+    - name: schema_version
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=3,sha8=d0ff5974)
+      dominant_character_pattern: free_text
+    - name: occurred_at
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 101
+      distinct_shape_samples:
+      - string(len=27,sha8=26b0f605)
+      - string(len=27,sha8=3de478b5)
+      - string(len=27,sha8=1d3a3ded)
+      - string(len=27,sha8=c9292798)
+      - string(len=27,sha8=0e64a2be)
+      dominant_character_pattern: iso8601_prefix
+    - name: recorded_at
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 95
+      distinct_shape_samples:
+      - string(len=27,sha8=3de478b5)
+      - string(len=27,sha8=2fb656a6)
+      - string(len=27,sha8=15e1fd0a)
+      - string(len=27,sha8=90aedd1c)
+      - string(len=27,sha8=921ee8f7)
+      dominant_character_pattern: iso8601_prefix
+    - name: metadata_correlation_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 16
+      distinct_shape_samples:
+      - string(len=36,sha8=ba124259)
+      - string(len=36,sha8=d8d6d886)
+      - string(len=36,sha8=63ece66e)
+      - string(len=36,sha8=7be81846)
+      - string(len=36,sha8=3bdcc528)
+      dominant_character_pattern: uuid_like
+    - name: metadata_source_service
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=25,sha8=c76aafa3)
+      dominant_character_pattern: free_text
+    - name: payload_event_types
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 33
+      distinct_shape_samples:
+      - string(len=20,sha8=1b6009cb)
+      - string(len=23,sha8=f5803b75)
+      - string(len=16,sha8=740011a6)
+      - string(len=19,sha8=b4883320)
+      - string(len=19,sha8=223f075e)
+      dominant_character_pattern: free_text
+    - name: payload_key_count
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 10
+      distinct_shape_samples:
+      - int64
+    numeric:
+      sequence_number:
+        min: 1.0
+        max: 50.0
+        mean: 21.75206611570248
+        p25: 8.0
+        p50: 20.0
+        p75: 35.0
+        p95: 47.0
+        p99: 49.0
+        stddev: 14.968441176968161
+      schema_version:
+        min: 1.0
+        max: 1.0
+        mean: 1.0
+        p25: 1.0
+        p50: 1.0
+        p75: 1.0
+        p95: 1.0
+        p99: 1.0
+        stddev: 0.0
+      payload_key_count:
+        min: 3.0
+        max: 13.0
+        mean: 7.363636363636363
+        p25: 6.0
+        p50: 7.0
+        p75: 9.0
+        p95: 11.0
+        p99: 13.0
+        stddev: 2.335496832484569
+llm_annotations:
+  status: skipped
+  reason: --no-llm or OPENROUTER_API_KEY unset
+quality:
+  type: SodaChecks
+  specification:
+    checks:
+    - missing_count(event_id) = 0
+    - duplicate_count(event_id) = 0
+    - recorded_gte_occurred = 1
+lineage:
+  upstream: []
+  downstream:
+  - id: pipeline::packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0001_lowly_captain_flint.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0003_simple_retro_girl.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0004_sloppy_black_knight.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0005_strong_skrulls.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0006_worried_spectrum.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables

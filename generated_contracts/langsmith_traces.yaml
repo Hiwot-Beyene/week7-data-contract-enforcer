@@ -1,0 +1,273 @@
+kind: DataContract
+apiVersion: v3.0.0
+id: langsmith-trace-record-migrated
+info:
+  title: LangSmith Trace Export — trace_record (migrated)
+  version: 1.0.0
+  owner: week7-team
+  description: Migrated canonical trace rows from outputs/migrate/migrated_runs.jsonl.
+servers:
+  local:
+    type: local
+    path: outputs/migrate/migrated_runs.jsonl
+    format: jsonl
+    note: Uses post-migration contract-aligned JSONL under outputs/migrate/.
+terms:
+  usage: Internal inter-system data contract. Do not publish raw exports.
+  limitations: Profiling reflects migrated snapshot only; regenerate after migrations.
+schema:
+  id:
+    type: string
+    format: uuid
+    required: true
+  name:
+    type: string
+    required: true
+  run_type:
+    type: string
+    enum:
+    - llm
+    - chain
+    - tool
+    - retriever
+    - embedding
+    required: true
+  inputs:
+    type: object
+    required: true
+  outputs:
+    type: object
+    required: true
+  error:
+    type: string
+    required: false
+  start_time:
+    type: string
+    format: date-time
+    required: false
+  end_time:
+    type: string
+    format: date-time
+    required: false
+  total_tokens:
+    type: integer
+    minimum: 0
+    required: false
+  prompt_tokens:
+    type: integer
+    minimum: 0
+    required: false
+  completion_tokens:
+    type: integer
+    minimum: 0
+    required: false
+  total_cost:
+    type: number
+    minimum: 0.0
+    required: false
+  tags:
+    type: array
+    items:
+      type: string
+  parent_run_id:
+    type: string
+    format: uuid
+    required: false
+  session_id:
+    type: string
+    format: uuid
+    required: true
+profiling:
+  engine: ydata-profiling
+  generated_at: '2026-04-01T21:27:53Z'
+  structural:
+    ydata_profiling:
+      status: ok
+      dataset: langsmith_traces
+      alerts: []
+      variable_count: 0
+    columns:
+    - name: id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=36,sha8=926d5663)
+      dominant_character_pattern: uuid_like
+    - name: name
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=24,sha8=acabf672)
+      dominant_character_pattern: free_text
+    - name: run_type
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=5,sha8=9414886b)
+      dominant_character_pattern: free_text
+    - name: session_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=36,sha8=078ae83f)
+      dominant_character_pattern: uuid_like
+    - name: error
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: start_time
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: end_time
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: total_tokens
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: prompt_tokens
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: completion_tokens
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: total_cost
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: tags_repr
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - string(len=32,sha8=0d622924)
+      dominant_character_pattern: free_text
+    - name: inputs_key_count
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - int64
+    - name: outputs_key_count
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - int64
+    numeric:
+      inputs_key_count:
+        min: 18.0
+        max: 18.0
+        mean: 18.0
+        p25: 18.0
+        p50: 18.0
+        p75: 18.0
+        p95: 18.0
+        p99: 18.0
+        stddev: 0.0
+      outputs_key_count:
+        min: 17.0
+        max: 17.0
+        mean: 17.0
+        p25: 17.0
+        p50: 17.0
+        p75: 17.0
+        p95: 17.0
+        p99: 17.0
+        stddev: 0.0
+    trace_shape_notes:
+      outputs_key_count_stats:
+        min: 17.0
+        max: 17.0
+        mean: 17.0
+        p25: 17.0
+        p50: 17.0
+        p75: 17.0
+        p95: 17.0
+        p99: 17.0
+        stddev: 0.0
+    token_fields_nullable_note: Migrated export may omit timings/tokens pending LangSmith backfill.
+llm_annotations:
+  status: skipped
+  reason: --no-llm or OPENROUTER_API_KEY unset
+quality:
+  type: SodaChecks
+  specification:
+    checks:
+    - row_count >= 1
+    - run_type in ('llm','chain','tool','retriever','embedding')
+    - coalesce(total_tokens, prompt_tokens+completion_tokens) consistent when all non-null
+lineage:
+  upstream: []
+  downstream:
+  - id: pipeline::packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0001_lowly_captain_flint.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0003_simple_retro_girl.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0004_sloppy_black_knight.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0005_strong_skrulls.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0006_worried_spectrum.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables

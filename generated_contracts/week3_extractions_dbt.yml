@@ -1,0 +1,29 @@
+version: 2
+sources:
+- name: contract_sources
+  meta:
+    generated_by: ContractGenerator
+    migrated_inputs: true
+    note: 'Logical sources: align staging models to these column tests (Week 7 Step 5).'
+  tables:
+  - name: week3_extractions
+    columns:
+    - name: doc_id
+      tests:
+      - not_null
+      - unique
+    - name: source_path
+      tests:
+      - not_null
+    - name: extracted_at
+      tests:
+      - not_null
+    - name: processing_time_ms
+      tests:
+      - not_null
+    - name: extracted_facts
+      tests:
+      - not_null
+    - name: entities
+      tests:
+      - not_null

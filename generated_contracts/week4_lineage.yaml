@@ -1,0 +1,188 @@
+kind: DataContract
+apiVersion: v3.0.0
+id: week4-brownfield-lineage-snapshot
+info:
+  title: Week 4 Brownfield Cartographer — Lineage Snapshot (migrated)
+  version: 1.0.0
+  owner: week4-team
+  description: Single snapshot JSONL line; migrated relative pipeline node_ids.
+servers:
+  local:
+    type: local
+    path: outputs/migrate/migrated_lineage_snapshots.jsonl
+    format: jsonl
+    note: Uses post-migration contract-aligned JSONL under outputs/migrate/.
+terms:
+  usage: Internal inter-system data contract. Do not publish raw exports.
+  limitations: Profiling reflects migrated snapshot only; regenerate after migrations.
+schema:
+  snapshot_id:
+    type: string
+    format: uuid
+    required: true
+  codebase_root:
+    type: string
+    required: true
+  git_commit:
+    type: string
+    pattern: ^[a-f0-9]{40}$
+    required: true
+  nodes:
+    type: array
+    items:
+      node_id:
+        type: string
+        required: true
+      type:
+        type: string
+        enum:
+        - FILE
+        - TABLE
+        - SERVICE
+        - MODEL
+        - PIPELINE
+        - EXTERNAL
+      label:
+        type: string
+      metadata:
+        type: object
+  edges:
+    type: array
+    items:
+      source:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+      relationship:
+        type: string
+        enum:
+        - IMPORTS
+        - CALLS
+        - READS
+        - WRITES
+        - PRODUCES
+        - CONSUMES
+      confidence:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+  captured_at:
+    type: string
+    format: date-time
+    required: true
+profiling:
+  engine: ydata-profiling
+  generated_at: '2026-04-01T21:27:51Z'
+  structural:
+    nodes_table:
+      ydata_profiling:
+        status: ok
+        dataset: week4_lineage_nodes
+        alerts: []
+        variable_count: 0
+      columns:
+      - name: node_id
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 18
+        distinct_shape_samples:
+        - string(len=18,sha8=70d4a001)
+        - string(len=25,sha8=2d711077)
+        - string(len=19,sha8=fa7a1b7d)
+        - string(len=11,sha8=7e8ddda1)
+        - string(len=71,sha8=8a66b999)
+        dominant_character_pattern: free_text
+      - name: type
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 2
+        distinct_shape_samples:
+        - string(len=5,sha8=52ca2fea)
+        - string(len=8,sha8=cb4bc453)
+        dominant_character_pattern: free_text
+      - name: label
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 16
+        distinct_shape_samples:
+        - string(len=4,sha8=1f64fff0)
+        - string(len=11,sha8=f8c493ec)
+        - string(len=5,sha8=08515408)
+        - string(len=28,sha8=d098f024)
+        - string(len=28,sha8=94031e03)
+        dominant_character_pattern: free_text
+      - name: metadata_path
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 18
+        distinct_shape_samples:
+        - string(len=11,sha8=795c9ef5)
+        - string(len=18,sha8=02623381)
+        - string(len=12,sha8=0e41f91b)
+        - string(len=4,sha8=1f64fff0)
+        - string(len=61,sha8=d915b72b)
+        dominant_character_pattern: free_text
+      - name: metadata_language
+        dtype: object
+        null_fraction: 0.611111
+        cardinality: 1
+        distinct_shape_samples:
+        - string(len=3,sha8=4ec7c532)
+        dominant_character_pattern: free_text
+    edges_table:
+      ydata_profiling:
+        status: ok
+        dataset: week4_lineage_edges
+        alerts: []
+        variable_count: 0
+      columns:
+      - name: source
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 11
+        distinct_shape_samples:
+        - string(len=18,sha8=70d4a001)
+        - string(len=25,sha8=2d711077)
+        - string(len=19,sha8=fa7a1b7d)
+        - string(len=11,sha8=7e8ddda1)
+        - string(len=12,sha8=529d7242)
+        dominant_character_pattern: free_text
+      - name: target
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 7
+        distinct_shape_samples:
+        - string(len=66,sha8=0c529b7f)
+        - string(len=71,sha8=8a66b999)
+        - string(len=71,sha8=b1c49fac)
+        - string(len=72,sha8=bc9807fb)
+        - string(len=69,sha8=139af31e)
+        dominant_character_pattern: free_text
+      - name: relationship
+        dtype: object
+        null_fraction: 0.0
+        cardinality: 1
+        distinct_shape_samples:
+        - string(len=8,sha8=3953d6d9)
+        dominant_character_pattern: free_text
+      - name: confidence
+        dtype: float64
+        null_fraction: 0.0
+        cardinality: 1
+        distinct_shape_samples:
+        - float
+llm_annotations:
+  status: skipped
+  reason: --no-llm or OPENROUTER_API_KEY unset
+quality:
+  type: SodaChecks
+  specification:
+    checks:
+    - row_count(nodes) >= 1
+    - edge_endpoints_resolve_to_nodes = 1
+    - invalid_relationship_count = 0
+lineage:
+  upstream: []
+  downstream: []

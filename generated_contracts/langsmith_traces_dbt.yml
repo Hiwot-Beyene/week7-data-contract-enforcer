@@ -1,0 +1,36 @@
+version: 2
+sources:
+- name: contract_sources
+  meta:
+    generated_by: ContractGenerator
+    migrated_inputs: true
+    note: 'Logical sources: align staging models to these column tests (Week 7 Step 5).'
+  tables:
+  - name: langsmith_traces
+    columns:
+    - name: id
+      tests:
+      - not_null
+      - unique
+    - name: name
+      tests:
+      - not_null
+    - name: run_type
+      tests:
+      - not_null
+      - accepted_values:
+          values:
+          - llm
+          - chain
+          - tool
+          - retriever
+          - embedding
+    - name: session_id
+      tests:
+      - not_null
+    - name: inputs
+      tests:
+      - not_null
+    - name: outputs
+      tests:
+      - not_null

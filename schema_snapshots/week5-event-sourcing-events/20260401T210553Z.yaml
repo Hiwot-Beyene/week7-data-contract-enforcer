@@ -1,0 +1,54 @@
+contract_id: week5-event-sourcing-events
+snapshot_timestamp: '2026-04-01T21:05:53Z'
+snapshot_filename_ts: 20260401T210553Z
+schema:
+  event_id:
+    type: string
+    format: uuid
+    required: true
+  event_type:
+    type: string
+    required: true
+    description: PascalCase event name.
+  aggregate_id:
+    type: string
+    format: uuid
+    required: true
+  aggregate_type:
+    type: string
+    required: true
+  sequence_number:
+    type: integer
+    minimum: 1
+    required: true
+  payload:
+    type: object
+    required: true
+  metadata:
+    type: object
+    required: true
+    properties:
+      causation_id:
+        type: string
+        required: false
+      correlation_id:
+        type: string
+        format: uuid
+        required: true
+      user_id:
+        type: string
+        required: false
+      source_service:
+        type: string
+        required: true
+  schema_version:
+    type: string
+    required: true
+  occurred_at:
+    type: string
+    format: date-time
+    required: true
+  recorded_at:
+    type: string
+    format: date-time
+    required: true

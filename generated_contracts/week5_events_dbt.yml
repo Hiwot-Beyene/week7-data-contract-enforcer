@@ -1,0 +1,41 @@
+version: 2
+sources:
+- name: contract_sources
+  meta:
+    generated_by: ContractGenerator
+    migrated_inputs: true
+    note: 'Logical sources: align staging models to these column tests (Week 7 Step 5).'
+  tables:
+  - name: week5_events
+    columns:
+    - name: event_id
+      tests:
+      - not_null
+      - unique
+    - name: event_type
+      tests:
+      - not_null
+    - name: aggregate_id
+      tests:
+      - not_null
+    - name: aggregate_type
+      tests:
+      - not_null
+    - name: sequence_number
+      tests:
+      - not_null
+    - name: payload
+      tests:
+      - not_null
+    - name: metadata
+      tests:
+      - not_null
+    - name: schema_version
+      tests:
+      - not_null
+    - name: occurred_at
+      tests:
+      - not_null
+    - name: recorded_at
+      tests:
+      - not_null

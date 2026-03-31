@@ -1,0 +1,60 @@
+contract_id: week4-brownfield-lineage-snapshot
+snapshot_timestamp: '2026-04-01T21:05:40Z'
+snapshot_filename_ts: 20260401T210540Z
+schema:
+  snapshot_id:
+    type: string
+    format: uuid
+    required: true
+  codebase_root:
+    type: string
+    required: true
+  git_commit:
+    type: string
+    pattern: ^[a-f0-9]{40}$
+    required: true
+  nodes:
+    type: array
+    items:
+      node_id:
+        type: string
+        required: true
+      type:
+        type: string
+        enum:
+        - FILE
+        - TABLE
+        - SERVICE
+        - MODEL
+        - PIPELINE
+        - EXTERNAL
+      label:
+        type: string
+      metadata:
+        type: object
+  edges:
+    type: array
+    items:
+      source:
+        type: string
+        required: true
+      target:
+        type: string
+        required: true
+      relationship:
+        type: string
+        enum:
+        - IMPORTS
+        - CALLS
+        - READS
+        - WRITES
+        - PRODUCES
+        - CONSUMES
+      confidence:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+  captured_at:
+    type: string
+    format: date-time
+    required: true

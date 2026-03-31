@@ -1,0 +1,37 @@
+{
+  "report_id": "b570843f-81c0-4058-a7e3-23dc8d19d5f6",
+  "contract_id": "week3-document-refinery-extractions",
+  "generated_at": "2026-04-01T21:06:54Z",
+  "since_cutoff_utc": "2026-03-25T21:06:54Z",
+  "pair_selection": "consecutive_within_since_window",
+  "snapshots_total": 2,
+  "snapshots_in_since_window": 2,
+  "snapshots_considered": [
+    {
+      "file": "schema_snapshots/week3-document-refinery-extractions/20260401T210539Z.yaml",
+      "timestamp_utc": "2026-04-01T21:05:39Z"
+    },
+    {
+      "file": "schema_snapshots/week3-document-refinery-extractions/20260401T210550Z.yaml",
+      "timestamp_utc": "2026-04-01T21:05:50Z"
+    }
+  ],
+  "pairwise_evolution": [
+    {
+      "from_snapshot_file": "schema_snapshots/week3-document-refinery-extractions/20260401T210539Z.yaml",
+      "to_snapshot_file": "schema_snapshots/week3-document-refinery-extractions/20260401T210550Z.yaml",
+      "from_timestamp": "2026-04-01T21:05:39Z",
+      "to_timestamp": "2026-04-01T21:05:50Z",
+      "human_readable_diff": "(no structural diff)",
+      "classified_changes": [],
+      "breaking_change": false,
+      "summary_counts": {
+        "changes_detected": 0,
+        "paths_old": 13,
+        "paths_new": 13
+      }
+    }
+  ],
+  "breaking_change_detected": false,
+  "migration_impact_reports": []
+}

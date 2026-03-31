@@ -1,0 +1,54 @@
+version: 2
+sources:
+- name: contract_sources
+  meta:
+    generated_by: ContractGenerator
+    migrated_inputs: true
+    note: 'Logical sources: align staging models to these column tests (Week 7 Step 5).'
+  tables:
+  - name: week4_lineage_nodes
+    columns:
+    - name: node_id
+      tests:
+      - not_null
+      - unique
+    - name: type
+      tests:
+      - not_null
+      - accepted_values:
+          values:
+          - FILE
+          - TABLE
+          - SERVICE
+          - MODEL
+          - PIPELINE
+          - EXTERNAL
+    - name: label
+    - name: metadata_path
+    - name: metadata_language
+    description: 'Logical table: one row per snapshot.nodes[] element after parsing migrated_lineage_snapshots.jsonl.'
+  - name: week4_lineage_edges
+    columns:
+    - name: source
+      tests:
+      - not_null
+      - relationships: &id001
+          to: source('contract_sources', 'week4_lineage_nodes')
+          field: node_id
+    - name: target
+      tests:
+      - not_null
+      - relationships: *id001
+    - name: relationship
+      tests:
+      - not_null
+      - accepted_values:
+          values:
+          - IMPORTS
+          - CALLS
+          - READS
+          - WRITES
+          - PRODUCES
+          - CONSUMES
+    - name: confidence
+    description: 'Logical table: one row per snapshot.edges[]; source/target FK to week4_lineage_nodes.node_id.'

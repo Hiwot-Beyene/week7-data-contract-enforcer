@@ -1,0 +1,274 @@
+kind: DataContract
+apiVersion: v3.0.0
+id: week3-document-refinery-extractions
+info:
+  title: Week 3 Document Refinery — Extraction Records (migrated)
+  version: 1.0.0
+  owner: week3-team
+  description: One record per processed document. Inputs read from outputs/migrate/migrated_extractions.jsonl.
+servers:
+  local:
+    type: local
+    path: outputs/migrate/migrated_extractions.jsonl
+    format: jsonl
+    note: Uses post-migration contract-aligned JSONL under outputs/migrate/.
+terms:
+  usage: Internal inter-system data contract. Do not publish raw exports.
+  limitations: Profiling reflects migrated snapshot only; regenerate after migrations.
+schema:
+  doc_id:
+    type: string
+    format: uuid
+    pattern: ^[0-9a-f-]{36}$
+    required: true
+    unique: true
+    description: Primary key (deterministic UUID post-migration).
+  source_path:
+    type: string
+    required: true
+    description: Source document path or filename.
+  source_hash:
+    type: string
+    pattern: ^[a-f0-9]{64}$
+    required: false
+    description: SHA-256 when present; often null in legacy migrated export.
+  extracted_facts:
+    type: array
+    description: Facts array; migrated export uses legacy summary fact with confidence.
+    items:
+      confidence:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+        required: true
+      fact_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-f-]{36}$
+        required: true
+  entities:
+    type: array
+    required: false
+  extraction_model:
+    type: string
+    required: false
+    description: Model id when present.
+  processing_time_ms:
+    type: integer
+    minimum: 1
+    required: true
+  token_count:
+    type: object
+    properties:
+      input:
+        type: integer
+        required: false
+      output:
+        type: integer
+        required: false
+  extracted_at:
+    type: string
+    format: date-time
+    required: true
+profiling:
+  engine: ydata-profiling
+  generated_at: '2026-04-01T21:27:49Z'
+  structural:
+    ydata_profiling:
+      status: ok
+      dataset: week3_extractions
+      alerts: []
+      variable_count: 0
+    columns:
+    - name: doc_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 33
+      distinct_shape_samples:
+      - string(len=36,sha8=8eb2f968)
+      - string(len=36,sha8=0d8d68e8)
+      - string(len=36,sha8=5f07b961)
+      - string(len=36,sha8=920ef753)
+      - string(len=36,sha8=62fe097b)
+      dominant_character_pattern: uuid_like
+    - name: source_path
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 33
+      distinct_shape_samples:
+      - string(len=49,sha8=5ada4dcb)
+      - string(len=71,sha8=58c509d3)
+      - string(len=61,sha8=ce156b3b)
+      - string(len=61,sha8=4dfde69d)
+      - string(len=61,sha8=50f1b031)
+      dominant_character_pattern: free_text
+    - name: source_hash
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: extraction_model
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: processing_time_ms
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 55
+      distinct_shape_samples:
+      - int64
+    - name: token_count_input
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: token_count_output
+      dtype: object
+      null_fraction: 1.0
+      cardinality: 0
+      distinct_shape_samples: []
+      dominant_character_pattern: n/a
+    - name: extracted_at
+      dtype: object
+      null_fraction: 0.0
+      cardinality: 56
+      distinct_shape_samples:
+      - string(len=20,sha8=326619dc)
+      - string(len=20,sha8=3690efb6)
+      - string(len=20,sha8=83c2ef0c)
+      - string(len=20,sha8=51c20211)
+      - string(len=20,sha8=0c1b53de)
+      dominant_character_pattern: iso8601_prefix
+    - name: entities_len
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - int64
+    - name: extracted_facts_len
+      dtype: int64
+      null_fraction: 0.0
+      cardinality: 1
+      distinct_shape_samples:
+      - int64
+    - name: primary_fact_confidence
+      dtype: float64
+      null_fraction: 0.0
+      cardinality: 3
+      distinct_shape_samples:
+      - float
+    numeric:
+      processing_time_ms:
+        min: 7143.0
+        max: 107551.0
+        mean: 33366.392857142855
+        p25: 19428.0
+        p50: 33375.0
+        p75: 42299.75
+        p95: 66150.25
+        p99: 84939.95000000011
+        stddev: 19791.93007234313
+      entities_len:
+        min: 0.0
+        max: 0.0
+        mean: 0.0
+        p25: 0.0
+        p50: 0.0
+        p75: 0.0
+        p95: 0.0
+        p99: 0.0
+        stddev: 0.0
+      extracted_facts_len:
+        min: 1.0
+        max: 1.0
+        mean: 1.0
+        p25: 1.0
+        p50: 1.0
+        p75: 1.0
+        p95: 1.0
+        p99: 1.0
+        stddev: 0.0
+      primary_fact_confidence:
+        min: 0.05
+        max: 1.0
+        mean: 0.6642857142857143
+        p25: 0.65
+        p50: 0.65
+        p75: 0.65
+        p95: 1.0
+        p99: 1.0
+        stddev: 0.12237029785008444
+    confidence_distribution:
+      status: ok
+      min: 0.05
+      max: 1.0
+      mean: 0.6642857142857143
+      flags: []
+llm_annotations:
+  status: skipped
+  reason: --no-llm or OPENROUTER_API_KEY unset
+quality:
+  type: SodaChecks
+  specification:
+    checks:
+    - missing_count(doc_id) = 0
+    - duplicate_count(doc_id) = 0
+    - min(primary_fact_confidence) >= 0.0
+    - max(primary_fact_confidence) <= 1.0
+    - row_count >= 1
+lineage:
+  upstream: []
+  downstream:
+  - id: pipeline::packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0001_lowly_captain_flint.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0003_simple_retro_girl.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0004_sloppy_black_knight.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0005_strong_skrulls.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables
+  - id: pipeline::packages/evals/src/db/migrations/0006_worried_spectrum.sql
+    description: 'Week 4 lineage: SQL migration/pipeline consumes database tables (blast-radius context for adjacent
+      systems).'
+    fields_consumed:
+    - 'logical: relational schema under migration'
+    breaking_if_changed:
+    - migration SQL altering consumed tables

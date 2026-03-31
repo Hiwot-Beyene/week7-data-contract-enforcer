@@ -1,0 +1,47 @@
+{
+  "_meta": {
+    "documentation": "Numeric drift baselines per contract column."
+  },
+  "by_contract": {
+    "week3-document-refinery-extractions": {
+      "columns": {
+        "processing_time_ms": {
+          "mean": 33366.392857142855,
+          "std": 19791.930072343133,
+          "n": 56,
+          "established_at": "2026-04-01T20:50:37Z"
+        },
+        "primary_fact_confidence": {
+          "mean": 0.6642857142857143,
+          "std": 0.12237029785008438,
+          "n": 56,
+          "established_at": "2026-04-01T20:50:37Z"
+        }
+      }
+    },
+    "week5-event-sourcing-events": {
+      "columns": {
+        "sequence_number": {
+          "mean": 21.75206611570248,
+          "std": 14.968441176968161,
+          "n": 121,
+          "established_at": "2026-04-01T20:51:34Z"
+        }
+      }
+    },
+    "week4-brownfield-lineage-snapshot": {
+      "columns": {}
+    },
+    "langsmith-trace-record-migrated": {
+      "columns": {
+        "inputs_key_count": {
+          "mean": 18.0,
+          "std": 1e-09,
+          "n": 1,
+          "established_at": "2026-04-01T20:51:59Z"
+        }
+      }
+    }
+  },
+  "written_at": "2026-04-01T22:45:09Z"
+}

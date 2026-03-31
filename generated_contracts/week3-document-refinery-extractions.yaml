@@ -1,0 +1,243 @@
+kind: DataContract
+apiVersion: v3.0.0
+id: week3-document-refinery-extractions
+info:
+  title: Week 3 Document Refinery — Extraction Records
+  version: 1.0.0
+  owner: week3-team
+  description: Generated from profiled JSONL via CLI; clauses map nullability, types, and confidence bounds.
+servers:
+  local:
+    type: local
+    path: outputs/week3/extractions.jsonl
+    format: jsonl
+    note: Uses post-migration contract-aligned JSONL under outputs/migrate/.
+terms:
+  usage: Internal inter-system data contract. Do not publish raw exports.
+  limitations: Profiling reflects migrated snapshot only; regenerate after migrations.
+schema:
+  timestamp:
+    type: string
+    required: true
+  doc_id:
+    type: string
+    required: true
+    format: uuid
+    pattern: ^[0-9a-f-]{36}$
+  document_name:
+    type: string
+    required: true
+  final_strategy:
+    type: string
+    required: true
+    enum:
+    - B
+    - C
+  confidence_score:
+    type: number
+    required: true
+    minimum: 0.0
+    maximum: 1.0
+    description: Confidence score. Must remain 0.0–1.0 float. BREAKING if changed to 0–100.
+  cost_estimate_usd:
+    type: number
+    required: true
+  processing_time_ms:
+    type: integer
+    required: true
+  budget_cap_usd:
+    type: number
+    required: true
+  budget_status:
+    type: string
+    required: true
+    enum:
+    - under_cap
+  notes:
+    type: string
+    required: false
+    enum:
+    - layout_vision_fallback
+  prompt_tokens:
+    type: number
+    required: false
+  completion_tokens:
+    type: number
+    required: false
+  entities:
+    type: array
+    required: false
+  token_count:
+    type: object
+    required: false
+    properties:
+      input:
+        type: integer
+        required: false
+      output:
+        type: integer
+        required: false
+profiling:
+  engine: ydata-profiling
+  generated_at: '2026-04-01T21:27:22Z'
+  structural:
+    ydata_profiling:
+      status: ok
+      dataset: week3_extractions_cli
+      alerts: []
+      variable_count: 0
+    column_profiles:
+    - name: timestamp
+      dtype: object
+      null_fraction: 0.0
+      cardinality_estimate: 57
+      sample_values:
+      - '2026-03-07T15:35:36Z'
+      - '2026-03-07T15:36:25Z'
+      - '2026-03-07T16:09:46Z'
+      - '2026-03-07T16:17:09Z'
+      - '2026-03-07T16:19:32Z'
+    - name: doc_id
+      dtype: object
+      null_fraction: 0.0
+      cardinality_estimate: 34
+      sample_values:
+      - 9839a5970ad580b2
+      - 2d67adad749f2d29
+      - 87b04fc167615c41
+      - doc123
+      - fcfc45be9459c048
+    - name: document_name
+      dtype: object
+      null_fraction: 0.0
+      cardinality_estimate: 34
+      sample_values:
+      - 942734e8b899_tax_expenditure_ethiopia_2021_22.pdf
+      - d8b2577a8d26_Security_Vulnerability_Disclosure_Standard_Procedure_1.pdf
+      - bf22efc7eb72_2013-E.C-Assigned-regular-budget-and-expense.pdf
+      - sample.pdf
+      - 65c67dc8cdb7_2013-E.C-Assigned-regular-budget-and-expense.pdf
+    - name: final_strategy
+      dtype: object
+      null_fraction: 0.0
+      cardinality_estimate: 2
+      sample_values:
+      - B
+      - C
+      _distinct_non_null:
+      - B
+      - C
+    - name: confidence_score
+      dtype: float64
+      null_fraction: 0.0
+      cardinality_estimate: 5
+      sample_values:
+      - '1.0'
+      - '0.65'
+      - '0.8'
+      - '0.7'
+      - '0.05'
+      stats:
+        min: 0.05
+        max: 1.0
+        mean: 0.6672413793103448
+        p25: 0.65
+        p50: 0.65
+        p75: 0.65
+        p95: 1.0
+        p99: 1.0
+        stddev: 0.12267190735537006
+    - name: cost_estimate_usd
+      dtype: float64
+      null_fraction: 0.0
+      cardinality_estimate: 1
+      sample_values:
+      - '0.0'
+      stats:
+        min: 0.0
+        max: 0.0
+        mean: 0.0
+        p25: 0.0
+        p50: 0.0
+        p75: 0.0
+        p95: 0.0
+        p99: 0.0
+        stddev: 0.0
+    - name: processing_time_ms
+      dtype: int64
+      null_fraction: 0.0
+      cardinality_estimate: 56
+      sample_values:
+      - '7143'
+      - '23756'
+      - '9572'
+      - '0'
+      - '11114'
+      stats:
+        min: 0.0
+        max: 107551.0
+        mean: 32215.827586206895
+        p25: 13011.75
+        p50: 33155.5
+        p75: 41690.25
+        p95: 66130.55
+        p99: 84117.72999999998
+        stddev: 20556.38360502937
+    - name: budget_cap_usd
+      dtype: float64
+      null_fraction: 0.0
+      cardinality_estimate: 1
+      sample_values:
+      - '2.0'
+      stats:
+        min: 2.0
+        max: 2.0
+        mean: 2.0
+        p25: 2.0
+        p50: 2.0
+        p75: 2.0
+        p95: 2.0
+        p99: 2.0
+        stddev: 0.0
+    - name: budget_status
+      dtype: object
+      null_fraction: 0.0
+      cardinality_estimate: 1
+      sample_values:
+      - under_cap
+      _distinct_non_null:
+      - under_cap
+    - name: notes
+      dtype: object
+      null_fraction: 0.9827586206896551
+      cardinality_estimate: 1
+      sample_values:
+      - layout_vision_fallback
+      _distinct_non_null:
+      - layout_vision_fallback
+    - name: prompt_tokens
+      dtype: float64
+      null_fraction: 1.0
+      cardinality_estimate: 0
+      sample_values: []
+    - name: completion_tokens
+      dtype: float64
+      null_fraction: 1.0
+      cardinality_estimate: 0
+      sample_values: []
+    contract_violations: []
+llm_annotations:
+  status: skipped
+  reason: --no-llm or OPENROUTER_API_KEY unset
+quality:
+  type: SodaChecks
+  specification:
+    checks:
+    - missing_count(doc_id) = 0
+    - duplicate_count(doc_id) = 0
+    - min(primary_fact_confidence) >= 0.0
+    - max(primary_fact_confidence) <= 1.0
+    - row_count >= 1
+lineage:
+  upstream: []
+  downstream: []
