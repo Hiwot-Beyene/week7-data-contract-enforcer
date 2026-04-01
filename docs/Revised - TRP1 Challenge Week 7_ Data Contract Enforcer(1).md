@@ -28,6 +28,175 @@ The Data Contract Enforcer turns every arrow in your inter-system data flow diag
 
 The first question a data engineering client asks in week one is: "Can you make sure this never breaks silently again?" The Data Contract Enforcer answers that question with a deployable system and a demonstration. The second question — "How would I know if it did break?" — is answered with the violation report and the blame chain. An FDE who walks in and deploys this in 48 hours is not selling consulting. They are selling certainty.
 
+# **New Skills Introduced**
+
+### **Technical Skills**
+
+* **Data contract specification formats:** Bitol Open Data Contract Standard (bitol-io/open-data-contract-standard), dbt schema.yml test definitions, JSON Schema draft-07 for payload validation.
+
+* **Statistical profiling at scale:** Distribution characterisation, outlier detection, column-level cardinality estimation using pandas-profiling / ydata-profiling. Knowing the difference between a structural violation and a statistical drift.
+
+* **Schema evolution taxonomy:** Backward/forward/full compatibility model from Confluent Schema Registry; breaking-change detection; deprecation-with-alias patterns.
+
+* **Lineage-based attribution:** Graph traversal for blame-chain construction using the Week 4 lineage graph; temporal ordering of upstream commits; confidence scoring for causal attribution.
+
+* **AI-specific data contracts:** Embedding drift detection via cosine distance; prompt input schema validation with JSON Schema; structured LLM output enforcement; LangSmith trace schema contracts.
+
+### **FDE Skills**
+
+* **The 48-hour data audit:** Produce a baseline data quality assessment of any client's primary data sources within 48 hours of access. This week you do it on your own platform — the hardest kind, because you cannot claim ignorance.
+
+* **Non-technical data quality communication:** Translating validation results and schema violations into business risk language that a product manager can act on without a glossary.
+
+* **Contract negotiation:** Facilitating the conversation between upstream data producers (you, two weeks ago) and downstream AI consumers (you, now) about formal quality commitments. The discipline of treating past-you as a third party.
+
+# **How This Maps to the Real World**
+
+Before implementing anything, you need an honest mental model of where this project sits relative to production data contract systems. The project simplifies several things deliberately — the simplifications are pedagogically sound, but an FDE who does not understand them will architect incorrectly in the field.
+
+## **The Three Trust Boundary Tiers**
+
+Every architectural decision in data contract enforcement changes depending on which tier you are operating in. This project operates in Tier 1\. You must understand all three.
+
+| TIER | BOUNDARY | WHAT YOU CAN SEE | BLAST RADIUS METHOD | REAL EXAMPLE |
+| :---- | :---- | :---- | :---- | :---- |
+| **1 — Same team** | Single repo or monorepo | Full lineage graph. Git history of all producers. All schemas. | Traverse lineage graph downstream from producer node. Full transitive depth. | This project. All five systems in one org. |
+| **2 — Same company** | Multiple teams, shared data platform | Your own systems \+ published contracts from other teams. Not their internal graphs. | Registry subscription query: who subscribed to this contract? Then each team runs their own internal blast radius. | Netflix inter-team data mesh. Airbnb's Minerva metric platform. |
+| **3 — Different companies** | API / data partnership boundary | Your own systems only. The partner is a black box. | Subscriber count from registry \+ version compatibility matrix. No graph traversal. | Stripe publishing API schema changes. AWS S3 event format changes affecting third-party consumers. |
+
+**In the real world:**  *Most data contract failures happen at Tier 2 boundaries — between teams inside the same company who assumed informal coordination would suffice. The tools exist (DataHub, OpenMetadata, dbt Mesh) but adoption lags because writing contracts feels like overhead until the first production incident caused by a silent schema change. After that incident, everyone wants contracts retroactively.*
+
+## **The Core Architectural Principle: Enforcement Is Always at the Consumer**
+
+Enforcement runs at the consumer's ingestion boundary — not at the producer, and not in transit. This is the most important principle in the project and the one most frequently misunderstood.
+
+The producer publishes the contract: a formal declaration of what it promises to deliver. The consumer runs the ValidationRunner against incoming data before any business logic processes it. If the check fails, the pipeline stops. The producer never knew the consumer was checking.
+
+This mirrors how APIs work in practice. Stripe publishes their API schema. You validate responses on your side before processing them. You do not trust that the data is valid simply because it arrived.
+
+**⚠  The SchemaEvolutionAnalyzer is the exception — it runs primarily on the producer side as a pre-emptive layer. It catches breaking changes before they ship to consumers. The ValidationRunner is the reactive layer that catches what the SchemaEvolutionAnalyzer missed or what changed without going through the schema evolution process.**
+
+## **Blast Radius: Lineage Graph vs Registry Subscription Model**
+
+The project uses the Week 4 lineage graph to compute blast radius. This works because you own all five systems and can traverse the graph. In production beyond Tier 1, this approach fails for three reasons:
+
+* **You cannot see inside external systems.** A downstream partner's internal architecture is opaque. You cannot traverse their lineage graph.
+
+* **The lineage graph is commercially sensitive.** It reveals architecture, data models, vendor dependencies. Companies do not publish it externally.
+
+* **The graph goes stale.** Lineage graphs must be continuously maintained. In practice they are generated periodically and are often weeks out of date.
+
+The production solution inverts the knowledge model. Instead of the producer discovering its consumers by traversing a graph, consumers register their dependency on a contract. The registry becomes the blast radius computation mechanism. When a producer publishes a breaking change, the registry answers: 'which subscribers are affected?' Each subscriber then independently computes their own internal blast radius.
+
+\# contract\_registry/subscriptions.yaml — the registry model  
+subscriptions:  
+  \- contract\_id: week3-document-refinery-extractions  
+    subscriber\_id: week4-cartographer  
+    fields\_consumed: \[doc\_id, extracted\_facts, extraction\_model\]  
+    breaking\_fields: \[extracted\_facts.confidence\]  
+    registered\_at: '2025-01-10T09:00:00Z'  
+    contact: week4-team@org.com
+
+  \- contract\_id: week3-document-refinery-extractions  
+    subscriber\_id: week6-enforcer  
+    fields\_consumed: \[extracted\_facts.confidence, doc\_id\]  
+    breaking\_fields: \[extracted\_facts.confidence\]  
+    registered\_at: '2025-01-10T09:00:00Z'  
+    contact: week6-team@org.com
+
+In this project the registry is a YAML file you maintain. In Tier 2–3 production systems it is a service — DataHub, OpenMetadata, or a purpose-built internal tool. The contract YAML and the ValidationRunner remain identical across all tiers. Only the blast radius computation mechanism changes.
+
+**In the real world:**  *Confluent Schema Registry is the most widely deployed contract enforcement system. It handles Tier 2–3 by enforcing compatibility rules at write time — it refuses to register a breaking schema change unless the compatibility mode explicitly permits it. Blast radius is never computed because breaking changes are blocked before they ship. This is stricter but less flexible than the ValidationRunner approach.*
+
+## **Real Tooling Comparison**
+
+This table positions the Data Contract Enforcer's components against the real tools that serve similar roles in production. Understanding the comparison is what allows you to have an intelligent conversation with a client who already has tooling.
+
+| FACET | THIS PROJECT | CONFLUENT SCHEMA REGISTRY | dbt TESTS / dbt MESH | GREAT EXPECTATIONS / SODA | PACT (API CONTRACTS) |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| **Contract format** | Bitol YAML \+ JSON Schema | Avro / Protobuf / JSON Schema in registry | schema.yml \+ singular tests | Expectation suites / Soda checks YAML | Consumer-driven pact files (JSON) |
+| **Enforcement location** | Consumer ingestion boundary (ValidationRunner) | Producer publish-time (blocks bad schema at source) | Consumer-side, before dbt run | Consumer-side, on data snapshot | Producer CI gate (pact tests run against provider) |
+| **Blast radius** | Registry subscriptions \+ lineage graph (Tier 1\) | Implicit: blocked change cannot affect anyone | dbt DAG — explicit via ref() cross-project | No native blast radius — validation only | Consumer-driven: each consumer defines what it needs |
+| **Schema evolution** | SchemaEvolutionAnalyzer snapshots \+ diff \+ taxonomy | Compatibility modes: BACKWARD / FORWARD / FULL — enforced at registration | Version field in schema.yml; manual migration | Checkpoint diffing across runs | Consumer pact is the version — provider must pass all registered pacts |
+| **AI-specific contracts** | Embedding drift, prompt schema, output schema violation rate | None — schema registry is structure only | None natively — custom macros possible | Partial: column-level distribution checks, no embedding awareness | None — API contract only, no AI semantics |
+| **Trust boundary** | Tier 1 (same repo). Registry design supports Tier 2\. | Tier 2–3. Used across teams and companies (Kafka ecosystem). | Tier 2 within dbt Mesh. Tier 1 without Mesh. | Tier 1–2. Usually within a single data platform. | Tier 3\. Designed for inter-company API contracts. |
+| **Key strength** | AI-specific extensions. Blame chain. Human-readable report. | Prevents breaking changes before they ship. Industry standard for Kafka. | Already in client stack if they use dbt. Zero additional infrastructure. | Statistical profiling is the deepest of any tool. Handles data quality beyond schema. | Puts consumer in control. Forces explicit compatibility negotiation. |
+| **Key weakness** | Lineage graph must be maintained. Blast radius limited to Tier 1 without registry. | Schema-only — no statistical or AI-specific checks. Requires Kafka/Confluent ecosystem. | Only checks what dbt can see. Cannot enforce AI-specific contracts. | No blame chain. No cross-system lineage. Verbose configuration. | Requires all consumers to maintain pact files. High coordination overhead. |
+
+**In the real world:**  *Most mature data platforms use multiple tools: Confluent Schema Registry for streaming schemas, dbt tests for warehouse data quality, Great Expectations for statistical profiling, and a custom or open-source data catalog (DataHub, OpenMetadata) for lineage and discovery. The Data Contract Enforcer's value proposition is unifying these concerns for AI systems specifically — which none of the existing tools do well.*
+
+# **Practical Tradeoffs Companies Actually Make**
+
+Every design decision in this project reflects a real tradeoff that engineering teams debate. Understanding the tradeoffs — not just the implementations — is what makes you credible in a client conversation.
+
+## **Tradeoff 1: Enforcement Strictness vs Pipeline Availability**
+
+The ValidationRunner in this project blocks the pipeline on CRITICAL violations. In production, strict blocking is sometimes the wrong choice — especially during initial deployment when contracts are new and may have false positives.
+
+| MODE | BEHAVIOUR | WHEN TO USE |
+| :---- | :---- | :---- |
+| AUDIT (default, week 1\) | Run checks, log results, never block. Write all violations to violation\_log/. | First 2 weeks of contract deployment on a client system. Contracts may have false positives. You need real production data to calibrate thresholds before you can justify blocking. |
+| WARN | Block on CRITICAL only. Warn on HIGH/MEDIUM. Pass data through with violations annotated. | After calibration period. Most useful when downstream systems can handle annotated data — they filter out low-confidence records themselves. |
+| ENFORCE (strict) | Block pipeline on any CRITICAL or HIGH violation. Quarantine data. Alert. | Mature contracts with low false positive rate. Mission-critical pipelines (financial data, healthcare). SLA requirements that make silent corruption unacceptable. |
+
+Implement all three modes in your ValidationRunner with a \--mode flag. Default to AUDIT for the first run on any new dataset. Trainees who start in ENFORCE mode on a client system and create a false positive that blocks production will have a very difficult conversation with that client.
+
+**In the real world:**  *Airbnb's Minerva platform and Spotify's Backstage both deployed data contract enforcement in AUDIT mode first, spending 4–8 weeks observing violations without blocking. This calibration period revealed which contracts were wrong before any downstream impact. Skipping the audit period is the most common deployment mistake.*
+
+## **Tradeoff 2: Contract Completeness vs Contract Drift**
+
+A complete contract — one that captures every structural, statistical, and semantic property of the data — is also a contract that breaks whenever the data legitimately evolves. Strict contracts become obstacles to intentional change. Loose contracts miss the violations they were meant to catch.
+
+* **The over-specified contract trap:** A contract that specifies exact row counts, exact cardinality, and tight statistical ranges will generate constant false positives as the upstream system grows. The enforcement team starts ignoring alerts. The system loses value.
+
+* **The under-specified contract trap:** A contract that only checks column existence and type passes the confidence 0.0–1.0 → 0–100 change because the type is still float. Statistical checks are what catch silent corruption — but they must be calibrated.
+
+* **The practical balance:** Structural checks should be strict (exact types, required fields, enum values). Statistical checks should have configurable thresholds and a baseline refresh cadence — typically monthly or after any intentional schema change.
+
+**In the real world:**  *dbt Labs recommends starting with only not\_null and unique tests on primary keys. Graduate to accepted\_values and relationships after one quarter. Graduate to statistical checks only after a full data cycle has been observed. This staged approach prevents the 'contract fatigue' pattern where teams disable checks because they fire too often.*
+
+## **Tradeoff 3: Who Owns the Contract**
+
+Three ownership models exist in production. Each has consequences for who does the work when a schema changes.
+
+| MODEL | HOW IT WORKS | ADVANTAGE | DISADVANTAGE |
+| :---- | :---- | :---- | :---- |
+| Producer-owned | Producer writes the contract and publishes it. Consumers subscribe and adapt to changes. | Producer understands the data best. One authoritative source. | Producer may not know what consumers need. Can change contract without consumer input. |
+| Consumer-owned (Pact model) | Each consumer publishes the subset of the contract they depend on. Producer must pass all consumer pacts to deploy. | Consumers are protected. Breaking changes are caught at producer CI gate. | High coordination overhead. N consumers × M fields \= large pact matrix. Slows producer deployment. |
+| Jointly negotiated | Producer proposes. Consumers review. Contract is merged via PR with approval from both sides. | Both parties understand and agree. Fewer surprises. | Process overhead. Requires clear ownership of the contract repository. Fails without governance discipline. |
+
+This project uses producer-owned contracts because the ContractGenerator runs on the producer's output. In a real multi-team engagement, push the client toward jointly negotiated contracts for any interface between two different teams. Producer-owned contracts without consumer review accumulate silent assumptions.
+
+**In the real world:**  *Pact (pact.io) is the most rigorous implementation of consumer-driven contracts and is widely used for microservice APIs. For data pipelines, DataHub's data contracts feature (released 2023\) implements a jointly negotiated model with workflow-based approval. Neither tool handles AI-specific contracts — that gap is where the Enforcer adds unique value.*
+
+## **Tradeoff 4: Real-Time Enforcement vs Batch Enforcement**
+
+The ValidationRunner in this project runs on a snapshot — a complete file passed at validation time. Real production systems have data arriving continuously.
+
+* **Batch enforcement (this project):** Run ValidationRunner on a complete snapshot before the pipeline consumes it. Simple. Works for any pipeline that processes files or daily partitions. Latency of violation detection: up to one batch cycle (hours or days).
+
+* **Stream enforcement:** Attach validation to the stream processor (Kafka Streams, Flink, Spark Structured Streaming). Validates every message as it arrives. Latency of violation detection: seconds. Implementation complexity: high. Requires embedding the contract checks into the stream processing job.
+
+* **Sampling enforcement:** Run structural checks on every record; run statistical checks on a rolling sample (e.g., 5% of records in a 1-hour window). Used when validation cost is non-trivial relative to data volume. Most practical for large-scale production.
+
+For this project: batch enforcement is correct. For a client with a streaming pipeline, frame it as: 'We will deploy batch enforcement first to calibrate thresholds with zero production risk, then migrate the critical checks to stream enforcement after 30 days.'
+
+**In the real world:**  *Great Expectations' streaming support (GX Cloud) and Soda's Soda Scan are the two most mature batch-to-stream enforcement systems. Both use the sampling model for statistical checks at scale — validating every record for structural checks and sampling for distribution checks. Full record-by-record statistical validation is rarely cost-effective above 10 million records per day.*
+
+## **Tradeoff 5: Schema Registry Overhead vs Governance Visibility**
+
+Maintaining a contract registry — even a YAML file — has a cost. That cost is justified in the right contexts and wasteful in others.
+
+* **When the registry overhead is worth it:** More than two teams share a data interface. Any cross-company data dependency. Regulatory or compliance requirements that demand auditability of schema changes. AI systems where silent data corruption has direct product consequences.
+
+* **When it is probably not worth it:** A single team owns both producer and consumer. The interface is changed by one person who also maintains the downstream code. The data is exploratory / experimental and schemas change daily.
+
+* **The minimum viable registry:** A YAML file in a shared repo that lists every inter-system dependency with the consuming fields and a contact email. This costs one hour to set up and saves days when the first schema change happens. Start here.
+
+**In the real world:**  *The most common data contract failure mode is not missing tooling — it is missing process. Teams have DataHub or OpenMetadata deployed, but nobody requires engineers to update the catalog when schemas change. The registry only works if schema changes require a registry update as part of the deployment process. The enforcement step that makes this real: the producer's CI pipeline must run the SchemaEvolutionAnalyzer before any deploy. If a breaking change is detected without a matching registry notification, the deploy fails.*
+
+# 
+
 # **The Inter-System Data Map**
 
 This section is the architectural foundation of the week. Before implementing anything, you must produce a data-flow diagram of your five systems and annotate every arrow with the exact schema it carries. The schemas below are the canonical target — your implementations may differ and you must document its rationale in your DOMAIN\_NOTES.md.
@@ -192,7 +361,7 @@ Every schema below is defined as a JSON object. Each system must serialise its p
 
 ## **The Dependency Graph — Which Schema Feeds Which**
 
-Each arrow below is a contract. You will enforce at least two of these contracts explicitly in Phase 2\.
+Each arrow below represents a contract. The subscribing systems register in the contract registry. The ValidationRunner enforces the contract at the consumer ingestion boundary.
 
 Week 1 intent\_record.code\_refs\[\]    ──►  Week 2 verdict: target\_ref is a code\_refs.file  
 Week 3 extraction\_record            ──►  Week 4 lineage: doc\_id becomes a node, facts become metadata  
@@ -200,28 +369,6 @@ Week 4 lineage\_snapshot             ──►  Week 7 ViolationAttributor (REQU
 Week 5 event\_record                 ──►  Week 7 schema contract: payload validated against event schema  
 LangSmith trace\_record              ──►  Week 7 AI Contract Extension: trace schema enforced  
 Week 2 verdict\_record               ──►  Week 7 AI Contract Extension: LLM output schema validation
-
-# **New Skills Introduced**
-
-### **Technical Skills**
-
-* **Data contract specification formats:** Bitol Open Data Contract Standard (bitol-io/open-data-contract-standard), dbt schema.yml test definitions, JSON Schema draft-07 for payload validation.
-
-* **Statistical profiling at scale:** Distribution characterisation, outlier detection, column-level cardinality estimation using pandas-profiling / ydata-profiling. Knowing the difference between a structural violation and a statistical drift.
-
-* **Schema evolution taxonomy:** Backward/forward/full compatibility model from Confluent Schema Registry; breaking-change detection; deprecation-with-alias patterns.
-
-* **Lineage-based attribution:** Graph traversal for blame-chain construction using the Week 4 lineage graph; temporal ordering of upstream commits; confidence scoring for causal attribution.
-
-* **AI-specific data contracts:** Embedding drift detection via cosine distance; prompt input schema validation with JSON Schema; structured LLM output enforcement; LangSmith trace schema contracts.
-
-### **FDE Skills**
-
-* **The 48-hour data audit:** Produce a baseline data quality assessment of any client's primary data sources within 48 hours of access. This week you do it on your own platform — the hardest kind, because you cannot claim ignorance.
-
-* **Non-technical data quality communication:** Translating validation results and schema violations into business risk language that a product manager can act on without a glossary.
-
-* **Contract negotiation:** Facilitating the conversation between upstream data producers (you, two weeks ago) and downstream AI consumers (you, now) about formal quality commitments. The discipline of treating past-you as a third party.
 
 ## **Compounding Architecture Note**
 
@@ -261,6 +408,8 @@ Your domain notes must answer all five questions with evidence, not assertions. 
 
 # **System Architecture**
 
+This system architecture is designed for Tier 1 (runs in your repo against your data). You could extend it with additional contract registery
+
 | COMPONENT | ROLE | KEY INPUT | KEY OUTPUT | USES FROM |
 | :---- | :---- | :---- | :---- | :---- |
 | **ContractGenerator** | Auto-generates baseline contracts from your existing system outputs | JSONL outputs from Weeks 1–5 \+ Week 4 lineage graph | Contract YAML files (Bitol) \+ dbt schema.yml | Week 4 lineage (required) |
@@ -270,13 +419,19 @@ Your domain notes must answer all five questions with evidence, not assertions. 
 | **AI Contract Extensions** | Applies contracts to AI-specific data patterns — embeddings, LLM I/O, trace schema | LangSmith trace JSONL, embedding vectors, Week 2 verdict records | Embedding drift score \+ output schema violation rate \+ trace contract report | All prior components |
 | **ReportGenerator** | Auto-generates the Enforcer Report from live validation data | violation\_log/ \+ validation\_reports/ \+ ai\_metrics.json | enforcer\_report/report\_data.json \+ report\_{date}.pdf | All prior components |
 
+Update your architecture to implement contract registery
+
+| ContractRegistry | Records who subscribes to which contract and which fields they consume | Manual subscriptions.yaml entries | Blast radius list for any contract violation notification | Tier 1–2. YAML for Tier 1; service (DataHub/OpenMetadata) for Tier 2 |
+| :---- | :---- | :---- | :---- | :---- |
+| **ViolationAttributor** | Traces violations to upstream commit; queries registry for blast radius | Validation failures \+ lineage graph \+ git log \+ registry | Blame chain \+ subscriber blast radius (not lineage-only) | Tier 1: lineage graph. Tier 2: registry query replaces graph traversal. |
+
 # 
 
 # **Phase 1 — ContractGenerator**
 
 The ContractGenerator reads from your outputs/ directories and the Week 4 lineage graph and produces contract YAML files. The goal is a contract that is immediately useful — one that a teammate can read and understand without asking you to explain it.
 
-## **Repository Layout (required)**
+## **1A – Repository Layout (required)**
 
 Your submission must follow this directory structure exactly. The evaluation scripts will look for files at these paths.
 
@@ -388,6 +543,46 @@ lineage:
       fields\_consumed: \[doc\_id, extracted\_facts, extraction\_model\]  
       breaking\_if\_changed: \[extracted\_facts.confidence, doc\_id\]
 
+## **1B — ContractRegistry  (optional, required component)**
+
+The ContractRegistry records who depends on which contract. This is the component that makes blast radius computation correct. Without it, the ViolationAttributor can only traverse the lineage graph — which only works in Tier 1\.
+
+In this project the registry is a YAML file. The structure must follow this schema exactly:
+
+\# contract\_registry/subscriptions.yaml  
+\# This file is manually maintained.  
+\# Every inter-system data dependency must be listed here.  
+\# A subscription is a consumer's formal declaration of dependency.
+
+subscriptions:  
+  \- contract\_id: week3-document-refinery-extractions  
+    subscriber\_id: week4-cartographer  
+    subscriber\_team: week4  
+    fields\_consumed: \[doc\_id, extracted\_facts, extraction\_model\]  
+    breaking\_fields:  
+      \- field: extracted\_facts.confidence  
+        reason: used for node ranking; scale change breaks ranking logic  
+      \- field: doc\_id  
+        reason: primary key for node identity in lineage graph  
+    validation\_mode: ENFORCE  
+    registered\_at: '2025-01-10T09:00:00Z'  
+    contact: week4-team@org.com
+
+  \- contract\_id: week3-document-refinery-extractions  
+    subscriber\_id: week6-enforcer  
+    subscriber\_team: week6  
+    fields\_consumed: \[extracted\_facts.confidence, doc\_id\]  
+    breaking\_fields:  
+      \- field: extracted\_facts.confidence  
+        reason: AI extension embedding drift check baseline  
+    validation\_mode: AUDIT  
+    registered\_at: '2025-01-10T09:00:00Z'  
+    contact: week6-team@org.com
+
+Write one subscription entry for every arrow in your data-flow diagram. You must have at minimum four subscriptions covering the Week 3 → Week 4, Week 4 → Week 7, Week 5 → Week 7, and LangSmith → Week 7 dependencies.
+
+**In the real world:**  *DataHub (datahubproject.io) and OpenMetadata (open-metadata.org) are the two dominant open-source data catalogs that implement registry functionality at Tier 2\. Both support subscribing to datasets and receiving notifications on schema change. Both require significant infrastructure to deploy. For a client engagement, the subscriptions.yaml pattern is the minimum viable registry — it can be migrated to a full catalog later without changing the ValidationRunner.*
+
 ## **Contract Quality Floor**
 
 A generated contract that requires more than 10 minutes of manual review to be trustworthy is not useful. Run the ContractGenerator on at least two of your own system outputs (Week 3 and Week 5 are required minimums) and measure the fraction of generated clauses that are correct without manual editing. Target: \> 70%. Document the fraction and any failure patterns in your DOMAIN\_NOTES.md.
@@ -473,6 +668,22 @@ git blame \-L {line\_start},{line\_end} \--porcelain {file\_path}
 
 Confidence score formula: base \= 1.0 − (days\_since\_commit × 0.1). Reduce by 0.2 for each lineage hop between the blamed file and the failing column. Never return fewer than 1 candidate or more than 5\.
 
+If you have implemented the contract registry, then use the ContractRegistry as the primary blast radius source and the lineage graph as an enrichment source. This is the correct Tier 1 model — and the one that degrades gracefully to Tier 2 by replacing the lineage traversal with a registry API call.
+
+The attribution pipeline runs in four steps:
+
+6. **Registry blast radius query:** Load contract\_registry/subscriptions.yaml. Find all subscriptions where contract\_id matches the failing contract and breaking\_fields contains the failing field. This is the definitive subscriber list. Do not compute this from the lineage graph.
+
+7. **Lineage traversal for enrichment:** Use the Week 4 lineage graph to compute transitive contamination — subscribers who received data from a directly affected subscriber. Annotate the blast radius with contamination\_depth. This is additive to the registry result, not a replacement for it.
+
+8. **Git blame for cause attribution:** For each upstream file identified via lineage traversal, run git log \--follow on the file to find recent changes. Rank by temporal proximity. Produce a blame chain with confidence scores.
+
+9. **Write violation log:** Write to violation\_log/violations.jsonl with the full blame chain, registry-sourced blast radius, and transitive depth from lineage enrichment.
+
+The blame chain confidence score formula: base \= 1.0 − (days\_since\_commit × 0.1). Reduce by 0.2 for each lineage hop between the blamed file and the failing column. Never return more than five candidates.
+
+**In the real world:**  *At Tier 2 and above, Step 1 is replaced by a registry API call: GET /api/subscriptions?contract\_id={id}\&breaking\_field={field}. Steps 2–4 remain identical. This is exactly how DataHub's impact analysis feature works — it queries the lineage graph for internal enrichment but uses the catalog registry as the authoritative subscriber list. The architectural pattern is: registry for 'who is affected', lineage for 'how deeply'.*
+
 ## **The Statistical Drift Rule (Silent Corruption Detection)**
 
 The most dangerous violations are the ones that pass structural checks. Implement this rule in the ValidationRunner: for every numeric column that has an established baseline mean and stddev (from the first validation run on that contract), emit a WARNING if the current mean deviates by more than 2 stddev and a FAIL if it deviates by more than 3 stddev. Store baselines in schema\_snapshots/baselines.json. This catches the confidence 0.0–1.0 → 0–100 change even if the type check passes.
@@ -494,15 +705,19 @@ python contracts/schema\_analyzer.py \\
 
 ## **Change Classification Taxonomy**
 
-| CHANGE TYPE | EXAMPLE | BACKWARD COMPATIBLE? | REQUIRED ACTION |
-| :---- | :---- | :---- | :---- |
-| Add nullable column | ADD COLUMN notes TEXT NULL | Yes | None. Downstream consumers can ignore the new column. |
-| Add non-nullable column | ADD COLUMN required\_field TEXT NOT NULL | No | Coordinate with all producers. Provide a default or migration script. Block deployment until all producers updated. |
-| Rename column | confidence → confidence\_score | No | Deprecation period with alias column. Notify all downstream consumers via blast radius report. Minimum 1 sprint before removal. |
-| Change type (widening) | INT → BIGINT or float32 → float64 | Usually yes | Validate no precision loss on existing data. Re-run statistical checks to confirm distribution unchanged. |
-| Change type (narrowing) | float 0.0–1.0 → int 0–100 | No — data loss risk | CRITICAL. Requires explicit migration plan with rollback. Blast radius report mandatory. Statistical baseline must be re-established after migration. |
-| Remove column | DROP COLUMN old\_field | No | Deprecation period mandatory (minimum 2 sprints). Blast radius report required. Each affected consumer must acknowledge removal in writing (JIRA ticket or PR comment). |
-| Change enum values | Add "EXTERNAL" to node type enum | Usually yes (additive) | Additive: notify all consumers. Removal of existing value: treat as breaking change. |
+## 
+
+| CHANGE TYPE | EXAMPLE IN YOUR SCHEMAS | COMPATIBLE? | REQUIRED ACTION | REAL TOOL HANDLING |
+| :---- | :---- | :---- | :---- | :---- |
+| Add nullable field | Add notes: string | null to extraction\_record | Yes | None. Consumers can ignore new fields. | Confluent BACKWARD mode: allows |
+| Add required field | Add required\_classifier to verdict\_record | No | Coordinate with all producers. Provide default or migration script. Block deploy until all producers updated. | Confluent BACKWARD mode: blocks |
+| Rename field | confidence → confidence\_score in any schema | No | Deprecation period with alias. Notify all registry subscribers. One sprint minimum before alias removal. | Confluent blocks. dbt: manual. Pact: consumer pact fails immediately. |
+| Widen type | INT → BIGINT in sequence\_number | Usually yes | Validate no precision loss. Re-run statistical checks to confirm distribution unchanged. | Confluent FULL mode: allows. Most tools: pass silently. |
+| Narrow type | float 0.0–1.0 → int 0–100 for confidence | No — data loss | CRITICAL. Requires migration plan with rollback. Registry blast radius report mandatory. Statistical baseline must be re-established after migration. | Confluent FORWARD mode: blocks. Great Expectations: catches via distribution check. |
+| Remove field | Drop source\_excerpt from extraction\_record | No | Two-sprint deprecation minimum. Each registry subscriber must acknowledge removal. No silent drops. | Confluent blocks. Pact: consumer pact fails if field was declared. |
+| Change enum values | Add EXTERNAL to Week 4 node.type enum | Additive: yes. Removal: no. | Additive additions: notify subscribers. Removal of existing value: treat as breaking — blast radius required. | Confluent BACKWARD: allows additions, blocks removals. |
+
+**In the real world:**  *Confluent Schema Registry's compatibility enforcement is the most battle-tested breaking change prevention system available. It operates at write time (the schema cannot be registered if it breaks compatibility), which is fundamentally more reliable than detect-and-alert. If a client already uses Confluent for Kafka, recommend they extend compatibility enforcement to their non-Kafka schemas using the REST API — it supports arbitrary JSON Schema registration, not just Kafka-specific schemas.*
 
 ## **Migration Impact Report Format**
 
@@ -516,56 +731,60 @@ Standard data contracts cover tabular data. The following three extensions cover
 
 ### **Extension 1: Embedding Drift Detection**
 
-Applies to: the extracted\_facts\[\*\].text column in Week 3 outputs (text fed to embeddings before being stored or searched).
+Applies to: the extracted\_facts\[\*\].text column in Week 3 outputs. Any column whose text values are embedded before being stored or searched.
 
-Implementation: On baseline run, embed a random sample of 200 text values using text-embedding-3-small. Store the centroid vector in schema\_snapshots/embedding\_baselines.npz. On each subsequent run, embed a fresh sample of 200 values and compute cosine distance from the stored centroid.
+Implementation: on baseline run, embed a random sample of 200 text values using text-embedding-3-small. Store the centroid vector. On each subsequent run, embed a fresh sample and compute cosine distance from the stored centroid. Alert if distance exceeds threshold (default 0.15).
 
-\# contracts/ai\_extensions.py  
-def check\_embedding\_drift(column\_values, baseline\_path, threshold=0.15):  
-    current \= embed\_sample(column\_values, n=200)  
+def check\_embedding\_drift(texts, baseline\_path, threshold=0.15):  
+    current \= embed\_sample(texts, n=200)  
     current\_centroid \= np.mean(current, axis=0)  
+    if not Path(baseline\_path).exists():  
+        np.savez(baseline\_path, centroid=current\_centroid)  
+        return {'status': 'BASELINE\_SET', 'drift\_score': 0.0}  
     baseline\_centroid \= np.load(baseline\_path)\['centroid'\]  
-    drift \= 1 \- cosine\_similarity(\[current\_centroid\], \[baseline\_centroid\])\[0\]\[0\]  
-    return {  
-        'drift\_score': round(drift, 4),  
-        'status': 'FAIL' if drift \> threshold else 'PASS',  
-        'threshold': threshold  
-    }
+    cosine\_sim \= np.dot(current\_centroid, baseline\_centroid) / (  
+        np.linalg.norm(current\_centroid) \* np.linalg.norm(baseline\_centroid) \+ 1e-9)  
+    drift \= 1 \- cosine\_sim  
+    return {'status': 'FAIL' if drift \> threshold else 'PASS',  
+            'drift\_score': round(float(drift), 4), 'threshold': threshold}
+
+**In the real world:**  *Arize AI and WhyLabs both offer commercial embedding drift monitoring. The cosine distance approach in this project matches their core algorithm. The practical challenge is establishing a meaningful baseline — a baseline from 200 records is statistically weak. Production systems use 10,000+ samples and track drift as a rolling percentile rather than a point-in-time distance. The threshold of 0.15 is a starting point; calibrate it against your actual data after observing two or three legitimate non-drifting runs.*
 
 ### **Extension 2: Prompt Input Schema Validation**
 
-Applies to: any structured data interpolated into a prompt template. For Week 3, this is the document metadata object passed into the extraction prompt.
+Applies to: any structured data interpolated into a prompt template. For Week 3, this is the document metadata object passed into the extraction prompt. Non-conforming records go to outputs/quarantine/ — they are never silently dropped or silently passed through.
 
-Define the expected prompt input as a JSON Schema. Validate every record before it enters the prompt. Quarantine non-conforming records to outputs/quarantine/{timestamp}.jsonl — do not drop them silently.
-
-\# generated\_contracts/prompt\_inputs/week3\_extraction\_prompt\_input.json  
-{  
-  "$schema": "http://json-schema.org/draft-07/schema\#",  
-  "type": "object",  
-  "required": \["doc\_id", "source\_path", "content\_preview"\],  
-  "properties": {  
-    "doc\_id":          { "type": "string", "format": "uuid" },  
-    "source\_path":     { "type": "string", "minLength": 1 },  
-    "content\_preview": { "type": "string", "maxLength": 8000 }  
+PROMPT\_INPUT\_SCHEMA \= {  
+  '$schema': 'http://json-schema.org/draft-07/schema\#',  
+  'type': 'object',  
+  'required': \['doc\_id', 'source\_path', 'content\_preview'\],  
+  'properties': {  
+    'doc\_id':          {'type': 'string', 'minLength': 36, 'maxLength': 36},  
+    'source\_path':     {'type': 'string', 'minLength': 1},  
+    'content\_preview': {'type': 'string', 'maxLength': 8000}  
   },  
-  "additionalProperties": false  
+  'additionalProperties': False  
 }
 
-### **Extension 3: Structured LLM Output Enforcement**
+**In the real world:**  *Prompt input validation is almost universally absent in production AI systems. Most teams hardcode prompt templates with f-strings and discover missing fields via LLM hallucination ('I could not find the document ID you mentioned') rather than validation errors. The gap between what a prompt template expects and what the data actually provides is the single most common source of structured output failures. Implementing this check is a fast win on any client engagement.*
 
-Applies to: Week 2 verdict records (structured LLM output) and any system where an LLM returns JSON.
+### **Extension 3: LLM Output Schema Violation Rate**
 
-Define the expected output schema. Validate every LLM response against it. Track the output\_schema\_violation\_rate metric per prompt version — a rising rate signals prompt degradation or model behaviour change. Write violations to violation\_log/ as type \= "llm\_output\_schema".
+Applies to: Week 2 verdict records and any system where an LLM returns structured JSON. Track the output\_schema\_violation\_rate metric per prompt version. A rising rate signals prompt degradation or model behaviour change.
 
-\# Track this metric in validation\_reports/ai\_metrics.json  
-{  
-  "run\_date": "2025-01-15",  
-  "prompt\_hash": "abc123...",  
-  "total\_outputs": 847,  
-  "schema\_violations": 12,  
-  "violation\_rate": 0.0142,  
-  "trend": "stable",  // 'rising' triggers WARN, 'stable'/'falling' are OK  
-  "baseline\_violation\_rate": 0.0089
+def check\_output\_schema\_violation\_rate(verdict\_records, baseline\_rate=None, warn\_threshold=0.02):  
+    total \= len(verdict\_records)  
+    violations \= sum(1 for v in verdict\_records  
+                     if v.get('overall\_verdict') not in ('PASS', 'FAIL', 'WARN'))  
+    rate \= violations / max(total, 1\)  
+    trend \= 'unknown'  
+    if baseline\_rate is not None:  
+        trend \= 'rising' if rate \> baseline\_rate \* 1.5 else 'stable'  
+    return {'total\_outputs': total, 'schema\_violations': violations,  
+            'violation\_rate': round(rate, 4), 'trend': trend,  
+            'status': 'WARN' if rate \> warn\_threshold else 'PASS'}
+
+**In the real world:**  *OpenAI's structured output mode (JSON mode with schema enforcement) reduces but does not eliminate output schema violations — models still occasionally produce syntactically valid JSON that does not conform to the semantic schema. Anthropic's tool use with input\_schema serves the same purpose. Tracking the violation rate over time is more useful than measuring it at a single point — a stable 1.5% violation rate is acceptable; a rate that rises from 0.5% to 3.0% over two weeks signals a prompt or model issue.*
 
 ## **4B — The Enforcer Report**
 

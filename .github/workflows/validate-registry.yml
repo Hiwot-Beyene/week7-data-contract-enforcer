@@ -1,0 +1,26 @@
+name: Validate contract registry
+
+on:
+  push:
+    paths:
+      - "contract_registry/subscriptions.yaml"
+      - "contracts/registry_loader.py"
+      - "scripts/validate_registry.py"
+  pull_request:
+    paths:
+      - "contract_registry/subscriptions.yaml"
+      - "contracts/registry_loader.py"
+      - "scripts/validate_registry.py"
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install pyyaml
+      - name: Validate subscriptions
+        run: python scripts/validate_registry.py

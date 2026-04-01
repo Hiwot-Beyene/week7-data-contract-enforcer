@@ -4,3 +4,5 @@ pandas>=2.0.0
 PyYAML>=6.0.1
 ydata-profiling>=4.6.0
 requests>=2.31.0
+jsonschema>=4.0.0
+reportlab>=4.0.0
