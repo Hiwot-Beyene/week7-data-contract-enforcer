@@ -1,0 +1,244 @@
+{
+  "report_id": "b06c2663-81cd-4ebe-8eb5-b364bcb52019",
+  "contract_id": "week3-document-refinery-extractions",
+  "snapshot_id": "592e7f3f7ff47bae21d81dd8e41a30aeb69cc0bf4364c6401a0561741ce33a85",
+  "run_timestamp": "2026-04-01T22:45:04Z",
+  "total_checks": 17,
+  "passed": 9,
+  "failed": 6,
+  "warned": 0,
+  "errored": 2,
+  "results": [
+    {
+      "check_id": "week3.doc_id.required",
+      "column_name": "doc_id",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "missing_count=0",
+      "expected": "all non-null",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.source_path.required",
+      "column_name": "source_path",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=58",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 58,
+      "sample_failing": [
+        "9839a5970ad580b2",
+        "2d67adad749f2d29",
+        "87b04fc167615c41",
+        "doc123",
+        "doc123"
+      ],
+      "message": "Required field 'source_path' is null or absent on 58 record(s)."
+    },
+    {
+      "check_id": "week3.processing_time_ms.required",
+      "column_name": "processing_time_ms",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "missing_count=0",
+      "expected": "all non-null",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.extracted_at.required",
+      "column_name": "extracted_at",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=58",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 58,
+      "sample_failing": [
+        "9839a5970ad580b2",
+        "2d67adad749f2d29",
+        "87b04fc167615c41",
+        "doc123",
+        "doc123"
+      ],
+      "message": "Required field 'extracted_at' is null or absent on 58 record(s)."
+    },
+    {
+      "check_id": "week3.processing_time_ms.type_match",
+      "column_name": "processing_time_ms",
+      "check_type": "type",
+      "status": "PASS",
+      "actual_value": "int64",
+      "expected": "integer",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.doc_id.format.uuid",
+      "column_name": "doc_id",
+      "check_type": "format",
+      "status": "FAIL",
+      "actual_value": "invalid_uuid_count=58",
+      "expected": "^[0-9a-f-]{36}$",
+      "severity": "CRITICAL",
+      "records_failing": 58,
+      "sample_failing": [
+        "9839a5970ad580b2",
+        "2d67adad749f2d29",
+        "87b04fc167615c41",
+        "doc123",
+        "doc123"
+      ],
+      "message": "Field 'doc_id' does not match UUID pattern."
+    },
+    {
+      "check_id": "week3.extracted_at.format.date-time",
+      "column_name": "extracted_at",
+      "check_type": "format",
+      "status": "PASS",
+      "actual_value": "all parseable",
+      "expected": "ISO-8601",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.doc_id.unique",
+      "column_name": "doc_id",
+      "check_type": "unique",
+      "status": "FAIL",
+      "actual_value": "duplicate_values=['doc123', '65d90f307eb456a9']",
+      "expected": "unique",
+      "severity": "CRITICAL",
+      "records_failing": 26,
+      "sample_failing": [
+        "doc123",
+        "65d90f307eb456a9"
+      ],
+      "message": "Duplicate values for 'doc_id'."
+    },
+    {
+      "check_id": "week3.source_hash.pattern",
+      "column_name": "source_hash",
+      "check_type": "pattern",
+      "status": "PASS",
+      "actual_value": "all match or null",
+      "expected": "^[a-f0-9]{64}$",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.processing_time_ms.minimum",
+      "column_name": "processing_time_ms",
+      "check_type": "range",
+      "status": "FAIL",
+      "actual_value": "below_minimum_count=2",
+      "expected": ">= 1",
+      "severity": "CRITICAL",
+      "records_failing": 2,
+      "sample_failing": [
+        "doc123",
+        "doc123"
+      ],
+      "message": "Integer 'processing_time_ms' must be >= 1."
+    },
+    {
+      "check_id": "week3.extracted_facts.confidence.range",
+      "column_name": "extracted_facts[*].confidence",
+      "check_type": "range",
+      "status": "PASS",
+      "actual_value": "all in [0.0,1.0]",
+      "expected": "min>=0.0, max<=1.0",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week3.quality.doc_id.missing_count",
+      "column_name": "doc_id",
+      "check_type": "completeness",
+      "status": "PASS",
+      "actual_value": "missing_count=0",
+      "expected": "0",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "missing_count(doc_id) = 0"
+    },
+    {
+      "check_id": "week3.quality.doc_id.duplicate_count",
+      "column_name": "doc_id",
+      "check_type": "unique",
+      "status": "FAIL",
+      "actual_value": "duplicate_values=['doc123', '65d90f307eb456a9']",
+      "expected": "unique",
+      "severity": "CRITICAL",
+      "records_failing": 26,
+      "sample_failing": [
+        "doc123",
+        "65d90f307eb456a9"
+      ],
+      "message": "duplicate_count(doc_id) = 0"
+    },
+    {
+      "check_id": "week3.quality.primary_fact_confidence.min",
+      "column_name": "primary_fact_confidence",
+      "check_type": "range",
+      "status": "ERROR",
+      "actual_value": "no samples",
+      "expected": ">= 0.0",
+      "severity": "WARNING",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Cannot compute min(primary_fact_confidence): no values."
+    },
+    {
+      "check_id": "week3.quality.primary_fact_confidence.max",
+      "column_name": "primary_fact_confidence",
+      "check_type": "range",
+      "status": "ERROR",
+      "actual_value": "no samples",
+      "expected": "<= 1.0",
+      "severity": "WARNING",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "max(primary_fact_confidence) <= 1.0"
+    },
+    {
+      "check_id": "week3.quality.row_count",
+      "column_name": "*",
+      "check_type": "volume",
+      "status": "PASS",
+      "actual_value": "row_count=58",
+      "expected": ">= 1",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "row_count >= 1"
+    },
+    {
+      "check_id": "week3.processing_time_ms.drift.mean",
+      "column_name": "processing_time_ms",
+      "check_type": "drift",
+      "status": "PASS",
+      "actual_value": "current_mean=32215.8, baseline_mean=33366.4, z=0.058_std",
+      "expected": "within 3 std of baseline mean (FAIL beyond); WARN beyond 2 std",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    }
+  ]
+}

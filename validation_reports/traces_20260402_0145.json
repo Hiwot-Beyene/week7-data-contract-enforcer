@@ -1,0 +1,39 @@
+{
+  "report_id": "6911da0c-3fbb-4089-8a8a-adb1debd5f33",
+  "contract_id": "langsmith-trace-record-migrated",
+  "snapshot_id": "2f10e0bdd71edc151a5b35c752333fa6e2e692cd69e264d55f4ae1f26014666a",
+  "run_timestamp": "2026-04-01T22:45:09Z",
+  "total_checks": 2,
+  "passed": 0,
+  "failed": 2,
+  "warned": 0,
+  "errored": 0,
+  "results": [
+    {
+      "check_id": "langsmith.run_type.enum",
+      "column_name": "run_type",
+      "check_type": "accepted_values",
+      "status": "FAIL",
+      "actual_value": "invalid_count=1",
+      "expected": "['chain', 'embedding', 'llm', 'retriever', 'tool']",
+      "severity": "CRITICAL",
+      "records_failing": 1,
+      "sample_failing": [
+        ""
+      ],
+      "message": "run_type must be enum value."
+    },
+    {
+      "check_id": "langsmith.inputs_key_count.drift.mean",
+      "column_name": "inputs_key_count",
+      "check_type": "drift",
+      "status": "FAIL",
+      "actual_value": "current_mean=17, baseline_mean=18, z=1000000000.000_std",
+      "expected": "within 3 std of baseline mean (FAIL beyond); WARN beyond 2 std",
+      "severity": "HIGH",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "inputs_key_count mean drifted 1000000000.0 stddev from baseline"
+    }
+  ]
+}

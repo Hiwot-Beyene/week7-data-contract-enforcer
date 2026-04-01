@@ -1,0 +1,49 @@
+{
+  "report_id": "37e75df2-5d01-41ad-94d8-bfb811c3d435",
+  "contract_id": "week4-brownfield-lineage-snapshot",
+  "snapshot_id": "5e703b8926c7176710658c1b456f90b7846c568094241604d0a8d2c8415f85e1",
+  "run_timestamp": "2026-04-01T22:45:06Z",
+  "total_checks": 3,
+  "passed": 3,
+  "failed": 0,
+  "warned": 0,
+  "errored": 0,
+  "results": [
+    {
+      "check_id": "week4.snapshot_id.required",
+      "column_name": "snapshot_id",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "present",
+      "expected": "uuid",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week4.git_commit.format",
+      "column_name": "git_commit",
+      "check_type": "pattern",
+      "status": "PASS",
+      "actual_value": "40 hex",
+      "expected": "40 hex",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week4.edges.endpoints",
+      "column_name": "edges[*].source,target",
+      "check_type": "referential",
+      "status": "PASS",
+      "actual_value": "all resolve",
+      "expected": "nodes",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    }
+  ]
+}

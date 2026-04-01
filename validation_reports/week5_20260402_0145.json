@@ -1,0 +1,241 @@
+{
+  "report_id": "885118a7-0b37-4e0a-862d-9df6b97f3958",
+  "contract_id": "week5-event-sourcing-events",
+  "snapshot_id": "dabc78b6dddfee34f38c8851bb285bae96e118e88df69967c3bec156c95735e6",
+  "run_timestamp": "2026-04-01T22:45:07Z",
+  "total_checks": 16,
+  "passed": 8,
+  "failed": 8,
+  "warned": 0,
+  "errored": 0,
+  "results": [
+    {
+      "check_id": "week5.event_id.required",
+      "column_name": "event_id",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'event_id' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.event_type.required",
+      "column_name": "event_type",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "missing_count=0",
+      "expected": "all non-null",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.aggregate_id.required",
+      "column_name": "aggregate_id",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'aggregate_id' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.aggregate_type.required",
+      "column_name": "aggregate_type",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'aggregate_type' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.sequence_number.required",
+      "column_name": "sequence_number",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'sequence_number' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.schema_version.required",
+      "column_name": "schema_version",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'schema_version' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.occurred_at.required",
+      "column_name": "occurred_at",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing_count=121",
+      "expected": "all non-null",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [
+        "row",
+        "row",
+        "row",
+        "row",
+        "row"
+      ],
+      "message": "Required field 'occurred_at' is null or absent on 121 record(s)."
+    },
+    {
+      "check_id": "week5.recorded_at.required",
+      "column_name": "recorded_at",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "missing_count=0",
+      "expected": "all non-null",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.event_id.unique",
+      "column_name": "event_id",
+      "check_type": "unique",
+      "status": "PASS",
+      "actual_value": "duplicate_count=0",
+      "expected": "unique",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.event_id.format.uuid",
+      "column_name": "event_id",
+      "check_type": "format",
+      "status": "PASS",
+      "actual_value": "all valid uuid shape",
+      "expected": "uuid",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.aggregate_id.format.uuid",
+      "column_name": "aggregate_id",
+      "check_type": "format",
+      "status": "PASS",
+      "actual_value": "all valid uuid shape",
+      "expected": "uuid",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.metadata.correlation_id.required",
+      "column_name": "metadata.correlation_id",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing=121",
+      "expected": "required",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [],
+      "message": "Required nested field metadata.correlation_id"
+    },
+    {
+      "check_id": "week5.metadata.correlation_id.format",
+      "column_name": "metadata.correlation_id",
+      "check_type": "format",
+      "status": "PASS",
+      "actual_value": "valid",
+      "expected": "uuid",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.metadata.source_service.required",
+      "column_name": "metadata.source_service",
+      "check_type": "not_null",
+      "status": "FAIL",
+      "actual_value": "missing=121",
+      "expected": "required",
+      "severity": "CRITICAL",
+      "records_failing": 121,
+      "sample_failing": [],
+      "message": "Required nested field metadata.source_service"
+    },
+    {
+      "check_id": "week5.recorded_gte_occurred",
+      "column_name": "recorded_at,occurred_at",
+      "check_type": "temporal",
+      "status": "PASS",
+      "actual_value": "ok",
+      "expected": "recorded_at >= occurred_at",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week5.sequence_number.monotonic",
+      "column_name": "sequence_number",
+      "check_type": "sequence",
+      "status": "PASS",
+      "actual_value": "monotonic",
+      "expected": "+1 per aggregate",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    }
+  ]
+}
