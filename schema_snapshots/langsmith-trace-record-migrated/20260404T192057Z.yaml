@@ -1,6 +1,6 @@
 contract_id: langsmith-trace-record-migrated
-snapshot_timestamp: '2026-04-01T21:05:42Z'
-snapshot_filename_ts: 20260401T210542Z
+snapshot_timestamp: '2026-04-04T19:20:57Z'
+snapshot_filename_ts: 20260404T192057Z
 schema:
   id:
     type: string
@@ -63,3 +63,5 @@ schema:
     type: string
     format: uuid
     required: true
+registry_subscribers:
+- week7-enforcer

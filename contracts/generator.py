@@ -25,12 +25,14 @@ Usage:
     --source outputs/week3/extractions.jsonl \\
     --contract-id week3-document-refinery-extractions \\
     --lineage outputs/week4/lineage_snapshots.jsonl \\
+    --registry contract_registry/subscriptions.yaml \\
     --output generated_contracts/
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -49,7 +51,18 @@ from schema_evolution import write_contract_schema_snapshot
 from validation_checks import flatten_extractions_for_profile
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from contracts.registry_loader import load_registry
+
 GENERATED = REPO_ROOT / "generated_contracts"
+
+_REGISTRY_LINEAGE_NOTE_OK = (
+    "registry_subscribers is the authoritative blast radius source. "
+    "downstream_nodes is lineage enrichment only."
+)
+_REGISTRY_LINEAGE_NOTE_MISSING = "registry not provided"
 
 # Authoritative inputs: migrated artifacts (post data-contract migration).
 MIGRATED = {
@@ -68,22 +81,102 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 def load_jsonl_records(path: Path) -> List[dict]:
+    """
+    Load records from JSONL, or a single JSON array/object, or Python-literal lines
+    (e.g. single-quoted keys) after strict JSON fails — common for notebook exports.
+    """
     if not path.is_file():
         return []
-    text = path.read_text(encoding="utf-8").strip()
+    raw = path.read_text(encoding="utf-8")
+    if raw.startswith("\ufeff"):
+        raw = raw[1:]
+    text = raw.strip()
     if not text:
         return []
+    # One JSON document: array of objects or a single object (incl. pretty-printed).
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict)]
+        if isinstance(data, dict):
+            return [data]
+    except json.JSONDecodeError:
+        pass
+
     out: List[dict] = []
-    for line in text.splitlines():
+    for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
-        out.append(json.loads(line))
+        try:
+            val = json.loads(line)
+        except json.JSONDecodeError:
+            try:
+                val = ast.literal_eval(line)
+            except (ValueError, SyntaxError) as e:
+                raise ValueError(
+                    f"{path}: line {lineno}: not valid JSON/JSONL (or Python dict literal). {e}"
+                ) from e
+        if isinstance(val, dict):
+            out.append(val)
+        elif isinstance(val, list):
+            for x in val:
+                if isinstance(x, dict):
+                    out.append(x)
+        else:
+            raise ValueError(
+                f"{path}: line {lineno}: expected a JSON object or array of objects, "
+                f"got {type(val).__name__}"
+            )
     return out
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def resolve_optional_registry_path(registry: Optional[str]) -> Optional[Path]:
+    """Return absolute path to registry file if ``registry`` is set and the file exists."""
+    if registry is None or not str(registry).strip():
+        return None
+    p = Path(registry)
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    return p if p.is_file() else None
+
+
+def enrich_contract_lineage_from_registry(
+    contract: dict,
+    contract_id: str,
+    registry_path: Optional[Path],
+) -> None:
+    """
+    After the contract dict is built (and lineage downstream/upstream set), add
+    ``registry_subscribers`` and ``note`` under ``lineage`` before YAML write.
+    """
+    contract.setdefault("lineage", {})
+    lin = contract["lineage"]
+    if registry_path is not None and registry_path.is_file():
+        registry = load_registry(str(registry_path))
+        subs = registry.get("subscriptions") or []
+        matching = [
+            s
+            for s in subs
+            if isinstance(s, dict) and str(s.get("contract_id", "")) == contract_id
+        ]
+        out_ids: List[str] = []
+        for s in matching:
+            sid = s.get("subscriber_id")
+            if sid is None:
+                continue
+            t = str(sid).strip()
+            if t:
+                out_ids.append(t)
+        lin["registry_subscribers"] = out_ids
+        lin["note"] = _REGISTRY_LINEAGE_NOTE_OK
+    else:
+        lin["registry_subscribers"] = []
+        lin["note"] = _REGISTRY_LINEAGE_NOTE_MISSING
 
 
 # ---------------------------------------------------------------------------
@@ -921,6 +1014,7 @@ def run_targeted_extractions_contract(
     repo_root: Path,
     use_llm: bool,
     openrouter_model: str,
+    registry_path: Optional[Path],
 ) -> None:
     records = load_jsonl_records(source)
     df = flatten_for_profile(records)
@@ -981,20 +1075,32 @@ def run_targeted_extractions_contract(
     else:
         llm_annotations = {"status": "skipped", "reason": "--no-llm or OPENROUTER_API_KEY unset"}
 
+    qc: List[str] = ["row_count >= 1"]
+    if "doc_id" in df.columns:
+        qc.extend(["missing_count(doc_id) = 0", "duplicate_count(doc_id) = 0"])
+    if "primary_fact_confidence" in df.columns:
+        qc.extend(
+            [
+                "min(primary_fact_confidence) >= 0.0",
+                "max(primary_fact_confidence) <= 1.0",
+            ]
+        )
+
+    title = f"Generated contract — {contract_id}"
+    description = (
+        "Profiled from JSONL via ContractGenerator; clauses map nullability, types, "
+        "and detected constraints."
+    )
+    owner = "data-contracts"
+
     contract = build_contract_common(
         contract_id=contract_id,
-        title="Week 3 Document Refinery — Extraction Records",
-        description="Generated from profiled JSONL via CLI; clauses map nullability, types, and confidence bounds.",
-        owner="week3-team",
+        title=title,
+        description=description,
+        owner=owner,
         relative_data_path=rel_data,
         schema=schema,
-        quality_checks=[
-            "missing_count(doc_id) = 0",
-            "duplicate_count(doc_id) = 0",
-            "min(primary_fact_confidence) >= 0.0",
-            "max(primary_fact_confidence) <= 1.0",
-            "row_count >= 1",
-        ],
+        quality_checks=qc,
         lineage_upstream=[],
         lineage_downstream=[],
         profiling={
@@ -1009,20 +1115,27 @@ def run_targeted_extractions_contract(
         llm_annotations=llm_annotations,
     )
     inject_lineage_instruction(contract, lineage_path)
+    enrich_contract_lineage_from_registry(contract, contract_id, registry_path)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     primary_out = output_dir / f"{contract_id}.yaml"
     write_yaml(primary_out, contract)
     if contract_id == "week3-document-refinery-extractions":
         write_yaml(output_dir / "week3_extractions.yaml", contract)
-    write_contract_schema_snapshot(repo_root, contract_id, schema)
-    write_dbt_schema(
-        output_dir / "week3_extractions_dbt.yml",
-        "contract_sources",
-        "week3_extractions",
-        dbt_week3_extraction_columns(),
+    write_contract_schema_snapshot(
+        repo_root,
+        contract_id,
+        schema,
+        registry_subscribers=list(contract.get("lineage", {}).get("registry_subscribers") or []),
     )
-    print(f"Wrote {primary_out} (and week3_extractions.yaml when id matches)", file=sys.stderr)
+    if contract_id == "week3-document-refinery-extractions":
+        write_dbt_schema(
+            output_dir / "week3_extractions_dbt.yml",
+            "contract_sources",
+            "week3_extractions",
+            dbt_week3_extraction_columns(),
+        )
+    print(f"Wrote {primary_out}", file=sys.stderr)
 
 
 def main() -> None:
@@ -1051,37 +1164,58 @@ def main() -> None:
         default=None,
         help="Output directory for YAML/dbt. Default: generated_contracts",
     )
+    parser.add_argument(
+        "--registry",
+        type=str,
+        default=None,
+        help="Optional contract_registry YAML (e.g. contract_registry/subscriptions.yaml) to enrich lineage.registry_subscribers",
+    )
     parser.add_argument("--no-llm", action="store_true", help="Skip OpenRouter schema annotations")
     parser.add_argument(
         "--openrouter-model",
         default=os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
         help="OpenRouter model id",
     )
+    parser.add_argument(
+        "--repo-root",
+        type=str,
+        default=None,
+        help="Repository root for snapshots and relative paths (default: enforcer repo root).",
+    )
     args = parser.parse_args()
     use_llm = not args.no_llm and bool(os.environ.get("OPENROUTER_API_KEY"))
+
+    registry_resolved = resolve_optional_registry_path(args.registry)
+    if registry_resolved is None:
+        print(
+            "INFO: No registry provided — blast radius will use lineage graph only",
+            file=sys.stderr,
+        )
 
     if args.source is not None:
         if not args.contract_id:
             parser.error("--contract-id is required when using --source")
-        if args.contract_id != "week3-document-refinery-extractions":
-            parser.error("CLI --source mode currently supports contract-id week3-document-refinery-extractions only")
         src = Path(args.source)
+        proj_root = Path(args.repo_root) if args.repo_root else REPO_ROOT
+        if not proj_root.is_absolute():
+            proj_root = REPO_ROOT / proj_root
         if not src.is_absolute():
-            src = REPO_ROOT / src
+            src = proj_root / src
         lin = Path(args.lineage or "outputs/week4/lineage_snapshots.jsonl")
         if not lin.is_absolute():
-            lin = REPO_ROOT / lin
+            lin = proj_root / lin
         out = Path(args.output or "generated_contracts")
         if not out.is_absolute():
-            out = REPO_ROOT / out
+            out = proj_root / out
         run_targeted_extractions_contract(
             source=src,
             contract_id=args.contract_id,
             lineage_path=lin,
             output_dir=out,
-            repo_root=REPO_ROOT,
+            repo_root=proj_root,
             use_llm=use_llm,
             openrouter_model=args.openrouter_model,
+            registry_path=registry_resolved,
         )
         return
 
@@ -1174,8 +1308,14 @@ def main() -> None:
         },
         llm_annotations=llm3,
     )
+    enrich_contract_lineage_from_registry(contract3, contract3["id"], registry_resolved)
     write_yaml(GENERATED / "week3_extractions.yaml", contract3)
-    write_contract_schema_snapshot(REPO_ROOT, contract3["id"], contract3.get("schema") or {})
+    write_contract_schema_snapshot(
+        REPO_ROOT,
+        contract3["id"],
+        contract3.get("schema") or {},
+        registry_subscribers=list(contract3.get("lineage", {}).get("registry_subscribers") or []),
+    )
     write_dbt_schema(
         GENERATED / "week3_extractions_dbt.yml",
         "contract_sources",
@@ -1255,8 +1395,14 @@ def main() -> None:
             },
             llm_annotations=llm4,
         )
+        enrich_contract_lineage_from_registry(contract4, contract4["id"], registry_resolved)
         write_yaml(GENERATED / "week4_lineage.yaml", contract4)
-        write_contract_schema_snapshot(REPO_ROOT, contract4["id"], contract4.get("schema") or {})
+        write_contract_schema_snapshot(
+            REPO_ROOT,
+            contract4["id"],
+            contract4.get("schema") or {},
+            registry_subscribers=list(contract4.get("lineage", {}).get("registry_subscribers") or []),
+        )
         _src = "contract_sources"
         write_dbt_schema_multi(
             GENERATED / "week4_lineage_dbt.yml",
@@ -1281,8 +1427,14 @@ def main() -> None:
             "outputs/migrate/migrated_lineage_snapshots.jsonl",
             "Migrated lineage file not found; run migrations first.",
         )
+        enrich_contract_lineage_from_registry(_ph4, _ph4["id"], registry_resolved)
         write_yaml(GENERATED / "week4_lineage.yaml", _ph4)
-        write_contract_schema_snapshot(REPO_ROOT, _ph4["id"], _ph4.get("schema") or {})
+        write_contract_schema_snapshot(
+            REPO_ROOT,
+            _ph4["id"],
+            _ph4.get("schema") or {},
+            registry_subscribers=list(_ph4.get("lineage", {}).get("registry_subscribers") or []),
+        )
         _src = "contract_sources"
         write_dbt_schema_multi(
             GENERATED / "week4_lineage_dbt.yml",
@@ -1349,8 +1501,14 @@ def main() -> None:
         },
         llm_annotations=llm5,
     )
+    enrich_contract_lineage_from_registry(contract5, contract5["id"], registry_resolved)
     write_yaml(GENERATED / "week5_events.yaml", contract5)
-    write_contract_schema_snapshot(REPO_ROOT, contract5["id"], contract5.get("schema") or {})
+    write_contract_schema_snapshot(
+        REPO_ROOT,
+        contract5["id"],
+        contract5.get("schema") or {},
+        registry_subscribers=list(contract5.get("lineage", {}).get("registry_subscribers") or []),
+    )
     write_dbt_schema(
         GENERATED / "week5_events_dbt.yml",
         "contract_sources",
@@ -1423,8 +1581,14 @@ def main() -> None:
         },
         llm_annotations=llmt,
     )
+    enrich_contract_lineage_from_registry(contract_t, contract_t["id"], registry_resolved)
     write_yaml(GENERATED / "langsmith_traces.yaml", contract_t)
-    write_contract_schema_snapshot(REPO_ROOT, contract_t["id"], contract_t.get("schema") or {})
+    write_contract_schema_snapshot(
+        REPO_ROOT,
+        contract_t["id"],
+        contract_t.get("schema") or {},
+        registry_subscribers=list(contract_t.get("lineage", {}).get("registry_subscribers") or []),
+    )
     write_dbt_schema(
         GENERATED / "langsmith_traces_dbt.yml",
         "contract_sources",

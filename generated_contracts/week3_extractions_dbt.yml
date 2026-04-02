@@ -24,6 +24,3 @@ sources:
     - name: extracted_facts
       tests:
       - not_null
-    - name: entities
-      tests:
-      - not_null

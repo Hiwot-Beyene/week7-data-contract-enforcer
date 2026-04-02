@@ -1,6 +1,6 @@
 contract_id: week3-document-refinery-extractions
-snapshot_timestamp: '2026-04-01T21:27:22Z'
-snapshot_filename_ts: 20260401T212722Z
+snapshot_timestamp: '2026-04-04T19:20:53Z'
+snapshot_filename_ts: 20260404T192053Z
 schema:
   timestamp:
     type: string
@@ -63,3 +63,5 @@ schema:
       output:
         type: integer
         required: false
+registry_subscribers:
+- week4-cartographer

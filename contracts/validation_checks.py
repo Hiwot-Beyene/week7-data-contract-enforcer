@@ -68,6 +68,29 @@ def primary_fact_confidence(rec: dict) -> Optional[float]:
         return None
 
 
+def mean_extracted_facts_confidence(rec: dict) -> Optional[float]:
+    """
+    Per-document mean of ``extracted_facts[*].confidence`` (all facts).
+
+    Used for drift vs ``baselines.json`` so a silent 0.0–1.0 → 0–100 rescale is caught
+    by mean shift even when values stay numeric (type checks pass).
+    """
+    facts = rec.get("extracted_facts")
+    if not isinstance(facts, list) or not facts:
+        return None
+    vals: List[float] = []
+    for fact in facts:
+        if not isinstance(fact, dict) or fact.get("confidence") is None:
+            continue
+        try:
+            vals.append(float(fact["confidence"]))
+        except (TypeError, ValueError):
+            continue
+    if not vals:
+        return None
+    return float(sum(vals) / len(vals))
+
+
 def check_required_top_level(
     records: List[dict],
     field: str,
@@ -487,24 +510,46 @@ def check_extracted_facts_confidence(
                 out_of_range_vals.append(c)
                 if len(samples) < 5:
                     samples.append(str(cid_fact or "unknown_fact"))
+    if records and not all_vals:
+        return CheckResult(
+            check_id=cid,
+            column_name="extracted_facts[*].confidence",
+            check_type="range",
+            status="WARN",
+            actual_value="no numeric confidence samples in extracted_facts",
+            expected=f"min>={minimum}, max<={maximum}",
+            severity="WARNING",
+            records_failing=0,
+            sample_failing=[],
+            message=(
+                "Contract defines extracted_facts.items.confidence but no confidence values were found; "
+                "range check not applied (cannot verify 0.0–1.0 vs 0–100 scale)."
+            ),
+        )
     if bad:
         mx = max(out_of_range_vals) if out_of_range_vals else 0.0
         mn = min(out_of_range_vals) if out_of_range_vals else 0.0
         mean_all = sum(all_vals) / len(all_vals) if all_vals else 0.0
         max_all = max(all_vals) if all_vals else 0.0
+        if max_all > 1.0 or mx > 1.0:
+            msg = (
+                "confidence is in 0–100 range, not 0.0–1.0. Breaking change detected."
+            )
+        elif mn < minimum:
+            msg = f"One or more fact confidence values below contract minimum ({minimum})."
+        else:
+            msg = "One or more fact confidence values violate the contract range."
         return CheckResult(
             check_id=cid,
             column_name="extracted_facts[*].confidence",
             check_type="range",
             status="FAIL",
-            actual_value=f"max={max_all:.4g}, mean={mean_all:.4g} (out_of_range={bad}, max_bad={mx:.4g}, min_bad={mn:.4g})",
+            actual_value=f"max={max_all:.4g}, mean={mean_all:.4g}",
             expected=f"max<={maximum}, min>={minimum}",
             severity="CRITICAL",
             records_failing=bad,
             sample_failing=samples,
-            message="confidence is in 0–100 range, not 0.0–1.0. Breaking change detected."
-            if max_all > 1.0
-            else "One or more fact confidence values violate the contract range.",
+            message=msg,
         )
     return CheckResult(
         check_id=cid,

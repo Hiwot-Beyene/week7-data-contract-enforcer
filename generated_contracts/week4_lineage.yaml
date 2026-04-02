@@ -74,7 +74,7 @@ schema:
     required: true
 profiling:
   engine: ydata-profiling
-  generated_at: '2026-04-01T21:27:51Z'
+  generated_at: '2026-04-04T19:20:55Z'
   structural:
     nodes_table:
       ydata_profiling:
@@ -186,3 +186,6 @@ quality:
 lineage:
   upstream: []
   downstream: []
+  registry_subscribers:
+  - week7-enforcer
+  note: registry_subscribers is the authoritative blast radius source. downstream_nodes is lineage enrichment only.

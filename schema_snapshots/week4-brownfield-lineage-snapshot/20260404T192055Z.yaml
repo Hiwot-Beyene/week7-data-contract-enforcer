@@ -1,6 +1,6 @@
 contract_id: week4-brownfield-lineage-snapshot
-snapshot_timestamp: '2026-04-01T21:25:15Z'
-snapshot_filename_ts: 20260401T212515Z
+snapshot_timestamp: '2026-04-04T19:20:55Z'
+snapshot_filename_ts: 20260404T192055Z
 schema:
   snapshot_id:
     type: string
@@ -58,3 +58,5 @@ schema:
     type: string
     format: date-time
     required: true
+registry_subscribers:
+- week7-enforcer

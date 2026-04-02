@@ -1,6 +1,6 @@
 contract_id: week5-event-sourcing-events
-snapshot_timestamp: '2026-04-01T21:27:52Z'
-snapshot_filename_ts: 20260401T212752Z
+snapshot_timestamp: '2026-04-04T19:21:28Z'
+snapshot_filename_ts: 20260404T192128Z
 schema:
   event_id:
     type: string
@@ -52,3 +52,5 @@ schema:
     type: string
     format: date-time
     required: true
+registry_subscribers:
+- week7-enforcer

@@ -1,264 +1,1064 @@
 {
-  "snapshot_id": "e4b2b7cc-709b-483c-9dbd-5b3a46f5a30b",
-  "codebase_root": "/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code",
-  "git_commit": "1b06293894c4df6b7e496e31581c8924c40de3e2",
+  "snapshot_id": "54b8dc89-dd41-47a2-a0b1-467ac58bc76c",
+  "codebase_root": "/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop",
+  "git_commit": "7be2c5838dbdeca8e915d4e46db70e910753d7f6",
   "nodes": [
     {
-      "node_id": "table::public.runs",
+      "node_id": "table::cast_to_date",
       "type": "TABLE",
-      "label": "runs",
+      "label": "cast_to_date",
       "metadata": {
-        "path": "public.runs"
-      }
-    },
-    {
-      "node_id": "table::public.taskMetrics",
-      "type": "TABLE",
-      "label": "taskMetrics",
-      "metadata": {
-        "path": "public.taskMetrics"
-      }
-    },
-    {
-      "node_id": "table::public.tasks",
-      "type": "TABLE",
-      "label": "tasks",
-      "metadata": {
-        "path": "public.tasks"
-      }
-    },
-    {
-      "node_id": "table::runs",
-      "type": "TABLE",
-      "label": "runs",
-      "metadata": {
-        "path": "runs"
-      }
-    },
-    {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql",
-      "type": "PIPELINE",
-      "label": "0001_add_timeout_to_runs.sql",
-      "metadata": {
-        "path": "packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql",
+        "path": "cast_to_date",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0001_lowly_captain_flint.sql",
-      "type": "PIPELINE",
-      "label": "0001_lowly_captain_flint.sql",
+      "node_id": "table::compute_booleans",
+      "type": "TABLE",
+      "label": "compute_booleans",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0001_lowly_captain_flint.sql",
+        "path": "compute_booleans",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql",
-      "type": "PIPELINE",
-      "label": "0002_bouncy_blazing_skull.sql",
+      "node_id": "table::customer_order_count",
+      "type": "TABLE",
+      "label": "customer_order_count",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql",
+        "path": "customer_order_count",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0003_simple_retro_girl.sql",
-      "type": "PIPELINE",
-      "label": "0003_simple_retro_girl.sql",
+      "node_id": "table::customer_orders_summary",
+      "type": "TABLE",
+      "label": "customer_orders_summary",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0003_simple_retro_girl.sql",
+        "path": "customer_orders_summary",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0004_sloppy_black_knight.sql",
-      "type": "PIPELINE",
-      "label": "0004_sloppy_black_knight.sql",
+      "node_id": "table::customers",
+      "type": "TABLE",
+      "label": "customers",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0004_sloppy_black_knight.sql",
+        "path": "customers",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
-      "type": "PIPELINE",
-      "label": "0005_strong_skrulls.sql",
+      "node_id": "table::days",
+      "type": "TABLE",
+      "label": "days",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+        "path": "days",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0006_worried_spectrum.sql",
+      "node_id": "pipeline::models/marts/customers.yml",
       "type": "PIPELINE",
-      "label": "0006_worried_spectrum.sql",
+      "label": "customers.yml",
       "metadata": {
-        "path": "packages/evals/src/db/migrations/0006_worried_spectrum.sql",
+        "path": "models/marts/customers.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module defines the `customers` mart in the `jaffle-shop` database, which is a part of the `tenacious-academy-project`. The purpose of this mart is to provide a comprehensive view of customer data, including demographic information, purchase history, and engagement metrics. This mart is crucial for business intelligence and analytics, enabling organizations to make informed decisions based on customer insights."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/order_items.yml",
+      "type": "PIPELINE",
+      "label": "order_items.yml",
+      "metadata": {
+        "path": "models/marts/order_items.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module defines the `order_items` model in the `marts` database schema for the Jaffle Shop project, which is part of a larger data warehouse system. The purpose of this model is to store detailed information about individual items purchased by customers within the Jaffle Shop store. This includes fields such as product ID, quantity, price, and order date, among others. The `order_items` model serves as a foundational table for analyzing sales trends, customer behavior, and inventory management in the Jaffle Shop environment."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/orders.yml",
+      "type": "PIPELINE",
+      "label": "orders.yml",
+      "metadata": {
+        "path": "models/marts/orders.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "The purpose of this module is to define the `orders` mart in the Jaffle Shop database, which includes tables such as `order_items`, `customers`, and `products`. The mart aims to provide a comprehensive view of customer orders, including order details, product information, and customer demographics. This module ensures that the data is organized and easily accessible for analysis and reporting purposes within the Jaffle Shop environment."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_customers.yml",
+      "type": "PIPELINE",
+      "label": "stg_customers.yml",
+      "metadata": {
+        "path": "models/staging/stg_customers.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module defines the `stg_customers` model in the `models/staging` directory of the `dbt-labs_jaffle-shop` project, which is part of a larger data engineering pipeline for a brownfield cartographer. The purpose of this module is to define the structure and metadata of the `customers` table, including its columns, data types, primary key, and any other relevant information required by the ETL process."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_locations.yml",
+      "type": "PIPELINE",
+      "label": "stg_locations.yml",
+      "metadata": {
+        "path": "models/staging/stg_locations.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "The purpose of this module is to define the staging model for locations in the Jaffle Shop database, which will be used to load and transform data into a format suitable for further analysis or reporting."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_order_items.yml",
+      "type": "PIPELINE",
+      "label": "stg_order_items.yml",
+      "metadata": {
+        "path": "models/staging/stg_order_items.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "The purpose of this module is to define the staging model for order items in a database using the Jaffle Shop data model. This model includes fields such as `order_id`, `product_id`, `quantity`, and `price`. The module is designed to be used in conjunction with other models in the project to facilitate data integration and analysis."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_orders.yml",
+      "type": "PIPELINE",
+      "label": "stg_orders.yml",
+      "metadata": {
+        "path": "models/staging/stg_orders.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "The purpose of this module is to define the staging model for orders in a database using the Jaffle Shop data model, which includes fields such as order ID, customer ID, product ID, and quantity. The module ensures that the staging model is properly structured and aligned with the business requirements for handling orders in the system."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_products.yml",
+      "type": "PIPELINE",
+      "label": "stg_products.yml",
+      "metadata": {
+        "path": "models/staging/stg_products.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for defining the database schema and structure for the `stg_products` table in the `jaffle-shop` database. It includes the necessary fields such as `product_id`, `name`, `price`, and `category`. The module uses the `dbt-labs_jaffle-shop` library to define the model, ensuring that it adheres to best practices for data modeling and schema design."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_supplies.yml",
+      "type": "PIPELINE",
+      "label": "stg_supplies.yml",
+      "metadata": {
+        "path": "models/staging/stg_supplies.yml",
+        "language": "yaml",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module defines the `stg_supplies` table in the staging schema of the Jaffle Shop database, which is used to store information about supplies. It includes fields such as `id`, `name`, `quantity`, and `price`. The module is designed to be part of a larger data pipeline that processes and loads data into the database for further analysis or reporting."
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_customers",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_customers",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_items",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_items",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_orders",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_orders",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_products",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_products",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_stores",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_stores",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_supplies",
+      "type": "PIPELINE",
+      "label": "dbt_source",
+      "metadata": {
+        "purpose": "",
+        "path": "dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_supplies",
+        "language": "",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::ecom.raw_customers",
+      "type": "TABLE",
+      "label": "raw_customers",
+      "metadata": {
+        "path": "ecom.raw_customers",
+        "purpose": "",
         "language": "sql",
-        "last_modified": "2026-03-15T17:16:00Z"
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::tasks",
+      "node_id": "table::ecom.raw_items",
       "type": "TABLE",
-      "label": "tasks",
+      "label": "raw_items",
       "metadata": {
-        "path": "tasks"
+        "path": "ecom.raw_items",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::tasks_language_exercise_idx",
+      "node_id": "table::ecom.raw_orders",
       "type": "TABLE",
-      "label": "tasks_language_exercise_idx",
+      "label": "raw_orders",
       "metadata": {
-        "path": "tasks_language_exercise_idx"
+        "path": "ecom.raw_orders",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::tasks_run_id_runs_id_fk",
+      "node_id": "table::ecom.raw_products",
       "type": "TABLE",
-      "label": "tasks_run_id_runs_id_fk",
+      "label": "raw_products",
       "metadata": {
-        "path": "tasks_run_id_runs_id_fk"
+        "path": "ecom.raw_products",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::tasks_task_metrics_id_taskMetrics_id_fk",
+      "node_id": "table::ecom.raw_stores",
       "type": "TABLE",
-      "label": "tasks_task_metrics_id_taskMetrics_id_fk",
+      "label": "raw_stores",
       "metadata": {
-        "path": "tasks_task_metrics_id_taskMetrics_id_fk"
+        "path": "ecom.raw_stores",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::toolErrors",
+      "node_id": "table::ecom.raw_supplies",
       "type": "TABLE",
-      "label": "toolErrors",
+      "label": "raw_supplies",
       "metadata": {
-        "path": "toolErrors"
+        "path": "ecom.raw_supplies",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::toolErrors_run_id_runs_id_fk",
+      "node_id": "table::joined",
       "type": "TABLE",
-      "label": "toolErrors_run_id_runs_id_fk",
+      "label": "joined",
       "metadata": {
-        "path": "toolErrors_run_id_runs_id_fk"
+        "path": "joined",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     },
     {
-      "node_id": "table::toolErrors_task_id_tasks_id_fk",
+      "node_id": "table::locations",
       "type": "TABLE",
-      "label": "toolErrors_task_id_tasks_id_fk",
+      "label": "locations",
       "metadata": {
-        "path": "toolErrors_task_id_tasks_id_fk"
+        "path": "locations",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::order_items",
+      "type": "TABLE",
+      "label": "order_items",
+      "metadata": {
+        "path": "order_items",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::order_items_summary",
+      "type": "TABLE",
+      "label": "order_items_summary",
+      "metadata": {
+        "path": "order_items_summary",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::order_supplies_summary",
+      "type": "TABLE",
+      "label": "order_supplies_summary",
+      "metadata": {
+        "path": "order_supplies_summary",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::orders",
+      "type": "TABLE",
+      "label": "orders",
+      "metadata": {
+        "path": "orders",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::products",
+      "type": "TABLE",
+      "label": "products",
+      "metadata": {
+        "path": "products",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::renamed",
+      "type": "TABLE",
+      "label": "renamed",
+      "metadata": {
+        "path": "renamed",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source",
+      "type": "TABLE",
+      "label": "source",
+      "metadata": {
+        "path": "source",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_customers",
+      "type": "TABLE",
+      "label": "raw_customers",
+      "metadata": {
+        "path": "source:ecom.raw_customers",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_items",
+      "type": "TABLE",
+      "label": "raw_items",
+      "metadata": {
+        "path": "source:ecom.raw_items",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_orders",
+      "type": "TABLE",
+      "label": "raw_orders",
+      "metadata": {
+        "path": "source:ecom.raw_orders",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_products",
+      "type": "TABLE",
+      "label": "raw_products",
+      "metadata": {
+        "path": "source:ecom.raw_products",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_stores",
+      "type": "TABLE",
+      "label": "raw_stores",
+      "metadata": {
+        "path": "source:ecom.raw_stores",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::source:ecom.raw_supplies",
+      "type": "TABLE",
+      "label": "raw_supplies",
+      "metadata": {
+        "path": "source:ecom.raw_supplies",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/customers.sql",
+      "type": "PIPELINE",
+      "label": "customers.sql",
+      "metadata": {
+        "path": "models/marts/customers.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to retrieve and combine data from three different sources: `stg_customers`, `orders`, and the result of a join operation between these two tables. The purpose is to provide a comprehensive view of customer information, including their orders, which can be used for analysis or reporting purposes within the tenacious-academy-project."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/locations.sql",
+      "type": "PIPELINE",
+      "label": "locations.sql",
+      "metadata": {
+        "path": "models/marts/locations.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module defines the SQL queries for extracting data from two tables: `stg_locations` and `locations`. The purpose is to provide a structured way to access and manipulate location-related information within the database."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/metricflow_time_spine.sql",
+      "type": "PIPELINE",
+      "label": "metricflow_time_spine.sql",
+      "metadata": {
+        "path": "models/marts/metricflow_time_spine.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for creating a SQL query to extract the day of the week from a given date and store it in a new column named `date_day`. The query uses the `CAST` function to convert the `date_day` column to a date data type, which allows for easier manipulation and analysis."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/order_items.sql",
+      "type": "PIPELINE",
+      "label": "order_items.sql",
+      "metadata": {
+        "path": "models/marts/order_items.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to create a mart table named `order_items` by joining multiple source tables such as `stg_order_items`, `stg_orders`, `stg_products`, `stg_supplies`, and another table named `joined`. The purpose of this mart table is to provide a comprehensive view of all order items in the system, including their details, relationships with other tables, and any additional data that may be needed for analysis or reporting purposes."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/orders.sql",
+      "type": "PIPELINE",
+      "label": "orders.sql",
+      "metadata": {
+        "path": "models/marts/orders.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to extract and combine data from three different tables in the database, specifically `stg_orders`, `order_items`, and `customer_order_count`. It serves as a mart layer that aggregates and consolidates order-related information for analysis."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/products.sql",
+      "type": "PIPELINE",
+      "label": "products.sql",
+      "metadata": {
+        "path": "models/marts/products.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for querying the `products` table in the database, which contains information about various products available at the tenacious-academy-project. The SQL queries within this module are designed to fetch all records from both the `stg_products` staging table and the `products` final table, providing a comprehensive view of the product data for analysis or reporting purposes."
+      }
+    },
+    {
+      "node_id": "pipeline::models/marts/supplies.sql",
+      "type": "PIPELINE",
+      "label": "supplies.sql",
+      "metadata": {
+        "path": "models/marts/supplies.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to retrieve and load data from the `stg_supplies` table into the `supplies` mart in a database using the DBT framework. The purpose of this module is to ensure that the data is accurately captured, transformed, and stored for further analysis or reporting within the organization."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_customers.sql",
+      "type": "PIPELINE",
+      "label": "stg_customers.sql",
+      "metadata": {
+        "path": "models/staging/stg_customers.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for defining the SQL model `stg_customers` in the database schema, which includes selecting data from the `ecom` source and renaming it to `renamed`. This model is part of a larger data pipeline that processes customer data from various sources."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_locations.sql",
+      "type": "PIPELINE",
+      "label": "stg_locations.sql",
+      "metadata": {
+        "path": "models/staging/stg_locations.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to retrieve and load data from the `stores` table in the `ecom` schema of the `jaffle-shop` database into a staging area for further processing. The purpose is to ensure that the raw store data is available for analysis and transformation before it is loaded into the production environment."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_order_items.sql",
+      "type": "PIPELINE",
+      "label": "stg_order_items.sql",
+      "metadata": {
+        "path": "models/staging/stg_order_items.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to load and transform raw order items data from the E-commerce database into a staging table for further analysis. It utilizes the `source` function to fetch the raw data from the `ecom` schema's `raw_items` table, then applies any necessary transformations or renaming as specified in the model definition."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_orders.sql",
+      "type": "PIPELINE",
+      "label": "stg_orders.sql",
+      "metadata": {
+        "path": "models/staging/stg_orders.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is designed to extract and load data from the `orders` table in the `ecom` schema of the `jaffle-shop` database into a staging area for further processing. It performs two main operations: selecting all columns from the raw orders table and renaming specific columns as needed before loading them into the staging area."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_products.sql",
+      "type": "PIPELINE",
+      "label": "stg_products.sql",
+      "metadata": {
+        "path": "models/staging/stg_products.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for loading product data into a staging table in the database using the Jaffle Shop E-commerce dataset. It includes two SQL queries to retrieve raw and renamed product data, respectively."
+      }
+    },
+    {
+      "node_id": "pipeline::models/staging/stg_supplies.sql",
+      "type": "PIPELINE",
+      "label": "stg_supplies.sql",
+      "metadata": {
+        "path": "models/staging/stg_supplies.sql",
+        "language": "sql",
+        "last_modified": "2026-03-15T17:44:42Z",
+        "purpose": "This module is responsible for defining the SQL model `stg_supplies` in the database schema, which includes selecting data from the `raw_supplies` table and renaming it to `renamed`. This model is part of a larger data pipeline that processes and loads data into a staging area for further analysis or transformation."
+      }
+    },
+    {
+      "node_id": "table::stg_customers",
+      "type": "TABLE",
+      "label": "stg_customers",
+      "metadata": {
+        "path": "stg_customers",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::stg_locations",
+      "type": "TABLE",
+      "label": "stg_locations",
+      "metadata": {
+        "path": "stg_locations",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::stg_order_items",
+      "type": "TABLE",
+      "label": "stg_order_items",
+      "metadata": {
+        "path": "stg_order_items",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::stg_orders",
+      "type": "TABLE",
+      "label": "stg_orders",
+      "metadata": {
+        "path": "stg_orders",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::stg_products",
+      "type": "TABLE",
+      "label": "stg_products",
+      "metadata": {
+        "path": "stg_products",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::stg_supplies",
+      "type": "TABLE",
+      "label": "stg_supplies",
+      "metadata": {
+        "path": "stg_supplies",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
+      }
+    },
+    {
+      "node_id": "table::supplies",
+      "type": "TABLE",
+      "label": "supplies",
+      "metadata": {
+        "path": "supplies",
+        "purpose": "",
+        "language": "sql",
+        "last_modified": ""
       }
     }
   ],
   "edges": [
     {
-      "source": "table::public.runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::cast_to_date",
+      "target": "pipeline::models/marts/metricflow_time_spine.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::public.taskMetrics",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::compute_booleans",
+      "target": "pipeline::models/marts/orders.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::public.tasks",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::customer_order_count",
+      "target": "pipeline::models/marts/orders.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0001_add_timeout_to_runs.sql",
+      "source": "table::customer_orders_summary",
+      "target": "pipeline::models/marts/customers.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0001_lowly_captain_flint.sql",
+      "source": "table::customers",
+      "target": "pipeline::models/marts/customers.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0002_bouncy_blazing_skull.sql",
+      "source": "table::days",
+      "target": "pipeline::models/marts/metricflow_time_spine.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0003_simple_retro_girl.sql",
+      "source": "pipeline::models/marts/customers.yml",
+      "target": "table::customers",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/marts/order_items.yml",
+      "target": "table::order_items",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/marts/orders.yml",
+      "target": "table::orders",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_customers.yml",
+      "target": "table::stg_customers",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_locations.yml",
+      "target": "table::stg_locations",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_order_items.yml",
+      "target": "table::stg_order_items",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_orders.yml",
+      "target": "table::stg_orders",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_products.yml",
+      "target": "table::stg_products",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "pipeline::models/staging/stg_supplies.yml",
+      "target": "table::stg_supplies",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_customers",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_customers",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_customers",
+      "target": "pipeline::models/staging/stg_customers.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::runs",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0006_worried_spectrum.sql",
+      "source": "table::ecom.raw_items",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_items",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_items",
+      "target": "pipeline::models/staging/stg_order_items.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::tasks",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0004_sloppy_black_knight.sql",
+      "source": "table::ecom.raw_orders",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_orders",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_orders",
+      "target": "pipeline::models/staging/stg_orders.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::tasks",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::ecom.raw_products",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_products",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_products",
+      "target": "pipeline::models/staging/stg_products.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::tasks_language_exercise_idx",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0004_sloppy_black_knight.sql",
+      "source": "table::ecom.raw_stores",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_stores",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_stores",
+      "target": "pipeline::models/staging/stg_locations.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::tasks_run_id_runs_id_fk",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::ecom.raw_supplies",
+      "target": "pipeline::dbt_source:/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/dbt-labs_jaffle-shop/models/staging/__sources.yml:ecom.raw_supplies",
+      "relationship": "PRODUCES",
+      "confidence": 1.0
+    },
+    {
+      "source": "table::ecom.raw_supplies",
+      "target": "pipeline::models/staging/stg_supplies.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::tasks_task_metrics_id_taskMetrics_id_fk",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::joined",
+      "target": "pipeline::models/marts/customers.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::toolErrors",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::joined",
+      "target": "pipeline::models/marts/order_items.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::toolErrors_run_id_runs_id_fk",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::locations",
+      "target": "pipeline::models/marts/locations.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     },
     {
-      "source": "table::toolErrors_task_id_tasks_id_fk",
-      "target": "pipeline::/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/week4-the-brownfield_cartographer/.cartography/cloned/Hiwot-Beyene_TRP1-Roo-Code/packages/evals/src/db/migrations/0005_strong_skrulls.sql",
+      "source": "table::order_items",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::order_items",
+      "target": "pipeline::models/marts/orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::order_items_summary",
+      "target": "pipeline::models/marts/orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::order_supplies_summary",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::orders",
+      "target": "pipeline::models/marts/customers.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::orders",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::orders",
+      "target": "pipeline::models/marts/orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::products",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::products",
+      "target": "pipeline::models/marts/products.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_customers.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_locations.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_products.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::renamed",
+      "target": "pipeline::models/staging/stg_supplies.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_customers.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_locations.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_products.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::source",
+      "target": "pipeline::models/staging/stg_supplies.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_customers",
+      "target": "pipeline::models/marts/customers.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_locations",
+      "target": "pipeline::models/marts/locations.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_order_items",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_orders",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_orders",
+      "target": "pipeline::models/marts/orders.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_products",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_products",
+      "target": "pipeline::models/marts/products.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_supplies",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::stg_supplies",
+      "target": "pipeline::models/marts/supplies.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::supplies",
+      "target": "pipeline::models/marts/order_items.sql",
+      "relationship": "CONSUMES",
+      "confidence": 0.95
+    },
+    {
+      "source": "table::supplies",
+      "target": "pipeline::models/marts/supplies.sql",
       "relationship": "CONSUMES",
       "confidence": 0.95
     }
   ],
-  "captured_at": "2026-04-01T11:22:17Z"
+  "captured_at": "2026-04-04T12:34:08Z"
 }

@@ -79,7 +79,7 @@ schema:
     required: true
 profiling:
   engine: ydata-profiling
-  generated_at: '2026-04-01T21:27:53Z'
+  generated_at: '2026-04-04T19:20:57Z'
   structural:
     ydata_profiling:
       status: ok
@@ -271,3 +271,6 @@ lineage:
     - 'logical: relational schema under migration'
     breaking_if_changed:
     - migration SQL altering consumed tables
+  registry_subscribers:
+  - week7-enforcer
+  note: registry_subscribers is the authoritative blast radius source. downstream_nodes is lineage enrichment only.
