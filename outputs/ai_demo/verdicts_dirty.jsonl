@@ -1,0 +1,10 @@
+{"application_id": "APEX-2001", "recommendation": "APPROVE", "rationale": "OK"}
+{"application_id": "APEX-2002", "recommendation": "SUSPEND", "rationale": "Model drift — invalid enum"}
+{"application_id": "APEX-2003", "recommendation": "PENDING_REVIEW", "rationale": "New label not in contract"}
+{"application_id": "APEX-2004", "recommendation": "APPROVE", "rationale": "OK"}
+{"application_id": "APEX-2005", "recommendation": "HOLD", "rationale": "Another bad value"}
+{"application_id": "APEX-2006", "recommendation": "DECLINE", "rationale": "Valid"}
+{"application_id": "APEX-2007", "recommendation": "REFER", "rationale": "Valid"}
+{"application_id": "APEX-2008", "recommendation": "UNKNOWN", "rationale": "Hallucinated category"}
+{"application_id": "APEX-2009", "recommendation": "APPROVE", "rationale": "OK"}
+{"application_id": "APEX-2010", "recommendation": "SUSPEND", "rationale": "Repeat drift"}

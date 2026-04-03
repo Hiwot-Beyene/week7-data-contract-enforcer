@@ -1,5 +1,11 @@
 """
 Shared schema snapshot I/O and normalization for ContractGenerator + SchemaEvolutionAnalyzer.
+
+Temporal snapshots live under ``schema_snapshots/{contract_id}/{UTC}.yaml`` (see
+``write_contract_schema_snapshot``). Diff two files with::
+
+    python contracts/schema_analyzer.py --contract-id <id> \\
+        --snapshot-old <older.yaml> --snapshot-new <newer.yaml> -o <report.json>
 """
 
 from __future__ import annotations
@@ -22,7 +28,13 @@ def snapshot_dir(repo_root: Path, contract_id: str) -> Path:
     return repo_root / "schema_snapshots" / contract_id
 
 
-def write_contract_schema_snapshot(repo_root: Path, contract_id: str, schema: dict) -> Path:
+def write_contract_schema_snapshot(
+    repo_root: Path,
+    contract_id: str,
+    schema: dict,
+    *,
+    registry_subscribers: Optional[List[str]] = None,
+) -> Path:
     """
     Persist inferred contract schema for evolution diffs.
     Path: schema_snapshots/{contract_id}/{timestamp}.yaml
@@ -32,12 +44,14 @@ def write_contract_schema_snapshot(repo_root: Path, contract_id: str, schema: di
     ts_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     out = snapshot_dir(repo_root, contract_id) / f"{ts_file}.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: Dict[str, Any] = {
         "contract_id": contract_id,
         "snapshot_timestamp": ts_iso,
         "snapshot_filename_ts": ts_file,
         "schema": schema,
     }
+    if registry_subscribers is not None:
+        payload["registry_subscribers"] = list(registry_subscribers)
     with out.open("w", encoding="utf-8") as f:
         yaml.dump(payload, f, default_flow_style=False, sort_keys=False, allow_unicode=True, width=100)
     return out

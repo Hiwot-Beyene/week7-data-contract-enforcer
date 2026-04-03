@@ -1,45 +1,46 @@
 #!/usr/bin/env python3
 """
-SchemaEvolutionAnalyzer (Phase 3) — diffs timestamped contract schema snapshots,
-classifies changes against the Week 7 taxonomy, and emits evolution + migration impact reports.
+SchemaEvolutionAnalyzer (Phase 3) — temporal YAML snapshots under ``schema_snapshots/{contract_id}/``,
+taxonomy-classified diffs, compatibility verdict, migration checklist, rollback plan, and optional
+**explicit snapshot pair** for evaluator reproduction.
 
-ContractGenerator writes: schema_snapshots/{contract_id}/{timestamp}.yaml
+Usage (auto-pick newest pair in ``--since`` window, else last two snapshots):
 
-Usage:
   python contracts/schema_analyzer.py \\
     --contract-id week3-document-refinery-extractions \\
     --since "7 days ago" \\
-    --output validation_reports/schema_evolution_week3.json
+    --output validation_reports/schema_evolution.json
+
+Diff **two named** snapshots (paths or filenames under the contract folder):
+
+  python contracts/schema_analyzer.py \\
+    --contract-id week3-document-refinery-extractions \\
+    --snapshot-old 20260401T120000Z.yaml \\
+    --snapshot-new 20260404T192053Z.yaml \\
+    -o validation_reports/schema_evolution_diff.json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 _CONTRACTS_DIR = str(REPO_ROOT / "contracts")
 if _CONTRACTS_DIR not in sys.path:
     sys.path.insert(0, _CONTRACTS_DIR)
 
-from schema_evolution import (
-    blast_radius_from_lineage,
-    field_to_human_line,
-    flatten_contract_schema,
-    list_snapshot_files,
-    load_snapshot_file,
-    parse_since_arg,
-    snapshot_file_datetime,
-)
+from schema_evolution import FieldRecord, flatten_contract_schema, parse_since_arg
 
 # ---------------------------------------------------------------------------
-# Contract id → generated YAML (for lineage.downstream in impact report)
+# Contract YAML → lineage.registry_subscribers (for checklist)
 # ---------------------------------------------------------------------------
 
 CONTRACT_YAML_BY_ID: Dict[str, str] = {
@@ -50,412 +51,342 @@ CONTRACT_YAML_BY_ID: Dict[str, str] = {
     "langsmith-trace-record-migrated": "langsmith_traces.yaml",
 }
 
+# ---------------------------------------------------------------------------
+# Tool-specific notes (Confluent Schema Registry, dbt, Pact)
+# ---------------------------------------------------------------------------
+
+CHANGE_TOOL_MAP: Dict[str, Dict[str, str]] = {
+    "add_nullable_field": {
+        "confluent": "BACKWARD compatible — allowed",
+        "dbt": "No enforcement — passes silently",
+        "pact": "Consumer pact passes if field not declared required",
+    },
+    "add_required_field": {
+        "confluent": "BACKWARD incompatible — BLOCKED at registration",
+        "dbt": "Manual migration required",
+        "pact": "Consumer pact fails if consumer depends on absence",
+    },
+    "rename_field": {
+        "confluent": "BLOCKED under any compatibility mode",
+        "dbt": "Manual migration required — ref() breaks immediately",
+        "pact": "Consumer pact fails immediately — field name is in pact",
+    },
+    "type_narrowing": {
+        "confluent": "FORWARD incompatible — BLOCKED",
+        "dbt": "Passes type check but breaks value semantics",
+        "pact": "Consumer pact fails if type was declared",
+    },
+    "type_widening": {
+        "confluent": "BACKWARD compatible — usually allowed",
+        "dbt": "Passes silently — no native type evolution check",
+        "pact": "Usually passes — depends on consumer pact declaration",
+    },
+    "remove_field": {
+        "confluent": "BLOCKED under BACKWARD and FULL modes",
+        "dbt": "Breaks ref() immediately at compile time",
+        "pact": "Consumer pact fails if field was declared",
+    },
+    "enum_value_added": {
+        "confluent": "BACKWARD compatible — allowed",
+        "dbt": "accepted_values test fails until test updated",
+        "pact": "Consumer pact passes if new value not in consumer's enum list",
+    },
+    "enum_value_removed": {
+        "confluent": "BACKWARD incompatible — BLOCKED",
+        "dbt": "accepted_values test fails",
+        "pact": "Consumer pact fails if removed value was in pact",
+    },
+}
+
+_TOOL_NO_MATERIAL: Dict[str, str] = {
+    "confluent": "No registration impact for this field",
+    "dbt": "No schema test delta required for this field",
+    "pact": "No consumer update required for this declaration",
+}
+
+
+def _tool_dict(map_key: str) -> Dict[str, str]:
+    if map_key in CHANGE_TOOL_MAP:
+        return dict(CHANGE_TOOL_MAP[map_key])
+    return dict(_TOOL_NO_MATERIAL)
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def load_yaml_contract_lineage(repo: Path, contract_id: str) -> List[dict]:
-    name = CONTRACT_YAML_BY_ID.get(contract_id)
-    if not name:
-        return []
-    p = repo / "generated_contracts" / name
-    if not p.is_file():
-        return []
+def _field_record_to_clause(rec: FieldRecord) -> dict:
+    d: Dict[str, Any] = {}
+    if rec.type is not None:
+        d["type"] = rec.type
+    if rec.required is not None:
+        d["required"] = rec.required
+    if rec.minimum is not None:
+        d["minimum"] = rec.minimum
+    if rec.maximum is not None:
+        d["maximum"] = rec.maximum
+    if rec.enum is not None:
+        d["enum"] = list(rec.enum)
+    if rec.format:
+        d["format"] = rec.format
+    if rec.pattern:
+        d["pattern"] = rec.pattern
+    return d
+
+
+def schema_to_field_clauses(schema: dict) -> Dict[str, dict]:
+    out: Dict[str, dict] = {}
+    if not isinstance(schema, dict):
+        return out
+    flat = flatten_contract_schema(schema)
+    for path, rec in flat.items():
+        out[path] = _field_record_to_clause(rec)
+    return out
+
+
+def _is_required(clause: dict) -> bool:
+    return clause.get("required") is True
+
+
+def _scalar_ne(a: Any, b: Any) -> bool:
+    if a is None and b is None:
+        return False
+    if a is None or b is None:
+        return True
     try:
-        import yaml
-
-        with p.open(encoding="utf-8") as f:
-            doc = yaml.safe_load(f)
-    except Exception:
-        return []
-    if not isinstance(doc, dict):
-        return []
-    lin = doc.get("lineage") or {}
-    down = lin.get("downstream") or []
-    return down if isinstance(down, list) else []
+        return float(a) != float(b)
+    except (TypeError, ValueError):
+        return str(a) != str(b)
 
 
-def _type_rank(t: Optional[str]) -> int:
-    if t == "integer":
-        return 1
-    if t == "number":
-        return 2
-    if t == "string":
-        return 3
-    return 0
-
-
-def _scale_suspicion(rec: FieldRecord) -> str:
-    """Heuristic: probability-like 0–1 vs percentage 0–100."""
-    if rec.type not in ("number", "integer"):
-        return "none"
-    if rec.minimum is not None and rec.maximum is not None:
-        if rec.minimum >= 0 and rec.maximum <= 1:
-            return "unit_interval"
-        if rec.minimum >= 0 and rec.maximum >= 100:
-            return "percentage_scale_suspect"
-    return "unknown_numeric"
-
-
-def classify_enum_change(
-    old_e: Optional[Tuple[str, ...]], new_e: Optional[Tuple[str, ...]]
-) -> Optional[dict]:
-    if old_e is None and new_e is None:
+def _enum_set(clause: Optional[dict]) -> Optional[Set[str]]:
+    if not clause:
         return None
-    os_, ns = set(old_e or ()), set(new_e or ())
-    if ns >= os_ and len(ns) > len(os_):
-        added = sorted(ns - os_)
-        return {
-            "change_type": "ENUM_VALUES_ADDED",
-            "example": f'Add {added[:5]!r} to enum',
-            "backward_compatible": True,
-            "required_action": "Additive: notify all consumers of new allowed values.",
-            "taxonomy_row": "Change enum values (additive)",
-        }
-    if os_ - ns:
-        removed = sorted(os_ - ns)
-        return {
-            "change_type": "ENUM_VALUES_REMOVED",
-            "example": f"Remove {removed!r} from enum",
-            "backward_compatible": False,
-            "required_action": "Removal of enum values is a breaking change: deprecation + consumer ack.",
-            "taxonomy_row": "Change enum values (removal)",
-        }
+    e = clause.get("enum")
+    if not isinstance(e, list):
+        return None
+    return {str(x) for x in e}
+
+
+def classify_change(
+    field: str,
+    old_clause: Optional[dict],
+    new_clause: Optional[dict],
+) -> Tuple[str, str, Dict[str, str], str]:
+    """
+    Classify a single field transition. Rules are evaluated in order; first match wins.
+    Returns (verdict, reason, tool_equivalents, taxonomy_category).
+
+    ``taxonomy_category`` is a stable label for rubric/evaluator scripts (maps to CHANGE_TOOL_MAP).
+    """
+    # 1–2: new field
+    if old_clause is None and new_clause is not None:
+        if _is_required(new_clause):
+            return (
+                "BREAKING",
+                "New required field",
+                _tool_dict("add_required_field"),
+                "add_required_field",
+            )
+        return (
+            "COMPATIBLE",
+            "New optional field",
+            _tool_dict("add_nullable_field"),
+            "add_nullable_field",
+        )
+
+    # 3: removed
+    if new_clause is None:
+        return ("BREAKING", "Field removed", _tool_dict("remove_field"), "remove_field")
+
+    assert old_clause is not None
+
+    old_t = old_clause.get("type")
+    new_t = new_clause.get("type")
+    if old_t != new_t:
+        return (
+            "BREAKING",
+            f"Type changed {old_t!r} → {new_t!r}",
+            _tool_dict("type_narrowing"),
+            "type_change",
+        )
+
+    if _scalar_ne(old_clause.get("maximum"), new_clause.get("maximum")):
+        return (
+            "BREAKING",
+            f"Range maximum changed {old_clause.get('maximum')!r} → {new_clause.get('maximum')!r}",
+            _tool_dict("type_narrowing"),
+            "range_maximum_change",
+        )
+
+    if _scalar_ne(old_clause.get("minimum"), new_clause.get("minimum")):
+        return (
+            "BREAKING",
+            f"Range minimum changed {old_clause.get('minimum')!r} → {new_clause.get('minimum')!r}",
+            _tool_dict("type_narrowing"),
+            "range_minimum_change",
+        )
+
+    os_ = _enum_set(old_clause)
+    ns = _enum_set(new_clause)
+    if os_ is not None or ns is not None:
+        o_eff: Set[str] = os_ if os_ is not None else set()
+        n_eff: Set[str] = ns if ns is not None else set()
+        removed = o_eff - n_eff
+        if removed:
+            return (
+                "BREAKING",
+                f"Enum values removed: {removed!r}",
+                _tool_dict("enum_value_removed"),
+                "enum_value_removed",
+            )
+        if n_eff > o_eff:
+            added = n_eff - o_eff
+            return (
+                "COMPATIBLE",
+                f"Enum values added: {added!r}",
+                _tool_dict("enum_value_added"),
+                "enum_value_added",
+            )
+
+    return ("COMPATIBLE", "No material change", dict(_TOOL_NO_MATERIAL), "no_material_change")
+
+
+def _snapshot_sort_key(path: Path) -> Tuple[str, str]:
+    """Sort by filename string (timestamp embedded); tie-break by full path."""
+    return (path.name, str(path))
+
+
+def _parse_snapshot_time(name: str) -> Optional[datetime]:
+    stem = Path(name).stem
+    for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%d_%H%M%S"):
+        try:
+            return datetime.strptime(stem, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
     return None
 
 
-def classify_type_change(old: FieldRecord, new: FieldRecord) -> dict:
-    ot, nt = old.type, new.type
-    o_scale, n_scale = _scale_suspicion(old), _scale_suspicion(new)
-    if ot == nt and ot in ("number", "integer"):
-        # Same declared type but bounds shifted (e.g. 0–1 → 0–100)
-        if o_scale == "unit_interval" and n_scale == "percentage_scale_suspect":
-            return {
-                "change_type": "TYPE_NARROWING_NUMERIC_SCALE",
-                "example": "float 0.0–1.0 → int 0–100 (semantic scale shift)",
-                "backward_compatible": False,
-                "required_action": "CRITICAL: migration plan with rollback; re-establish statistical baselines; blast radius mandatory.",
-                "taxonomy_row": "Change type (narrowing) / scale",
-                "severity": "CRITICAL",
-            }
-    ro, rn = _type_rank(ot), _type_rank(nt)
-    if ro and rn and rn > ro:
-        return {
-            "change_type": "TYPE_WIDENING",
-            "example": f"{ot} → {nt}",
-            "backward_compatible": True,
-            "required_action": "Validate no precision loss on existing data; re-run statistical checks.",
-            "taxonomy_row": "Change type (widening)",
-            "severity": "LOW",
-        }
-    if ro and rn and rn < ro:
-        return {
-            "change_type": "TYPE_NARROWING",
-            "example": f"{ot} → {nt}",
-            "backward_compatible": False,
-            "required_action": "CRITICAL where data loss risk: migration + rollback; blast radius mandatory.",
-            "taxonomy_row": "Change type (narrowing)",
-            "severity": "HIGH",
-        }
-    if ot != nt:
-        return {
-            "change_type": "TYPE_CHANGED",
-            "example": f"{ot} → {nt}",
-            "backward_compatible": False,
-            "required_action": "Assess consumers; migration or coercion layer.",
-            "taxonomy_row": "Change type (incompatible)",
-            "severity": "HIGH",
-        }
-    return {
-        "change_type": "TYPE_UNCHANGED",
-        "example": "",
-        "backward_compatible": True,
-        "required_action": "None (type).",
-        "taxonomy_row": "",
-        "severity": "LOW",
-    }
-
-
-def classify_range_change(old: FieldRecord, new: FieldRecord) -> Optional[dict]:
-    if old.minimum == new.minimum and old.maximum == new.maximum:
+def _load_snapshot_payload(path: Path) -> Optional[dict]:
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(text)
+    except Exception as exc:
+        print(f"ERROR: skipping malformed snapshot {path}: {exc}", file=sys.stderr)
         return None
-    narrower = False
-    if old.minimum is not None and new.minimum is not None and new.minimum > old.minimum:
-        narrower = True
-    if old.maximum is not None and new.maximum is not None and new.maximum < old.maximum:
-        narrower = True
-    if narrower:
-        return {
-            "change_type": "CONSTRAINT_NARROWED",
-            "example": f"range [{old.minimum},{old.maximum}] → [{new.minimum},{new.maximum}]",
-            "backward_compatible": False,
-            "required_action": "Validate existing data; notify consumers; may reject previously valid payloads.",
-            "taxonomy_row": "Constraint narrowing",
-            "severity": "MEDIUM",
-        }
-    return {
-        "change_type": "CONSTRAINT_WIDENED",
-        "example": f"range [{old.minimum},{old.maximum}] → [{new.minimum},{new.maximum}]",
-        "backward_compatible": True,
-        "required_action": "Usually compatible; confirm no downstream assumptions on bounds.",
-        "taxonomy_row": "Constraint widening",
-        "severity": "LOW",
-    }
+    if not isinstance(data, dict):
+        print(f"ERROR: skipping snapshot (not a mapping): {path}", file=sys.stderr)
+        return None
+    return data
 
 
-def _pair_suspected_renames(
-    o_map: Dict[str, FieldRecord], n_map: Dict[str, FieldRecord], removed: Set[str], added: Set[str]
-) -> Tuple[List[Tuple[str, str]], Set[str], Set[str]]:
-    pairs: List[Tuple[str, str]] = []
-    used_add: Set[str] = set()
-    used_rem: Set[str] = set()
-    for rp in sorted(removed):
-        old = o_map[rp]
-        best: Optional[Tuple[str, float]] = None
-        for ap in added:
-            if ap in used_add:
-                continue
-            new = n_map[ap]
-            if old.type != new.type:
-                continue
-            parent_o, seg_o = rp.rsplit(".", 1) if "." in rp else ("", rp)
-            parent_n, seg_n = ap.rsplit(".", 1) if "." in ap else ("", ap)
-            if parent_o != parent_n:
-                continue
-            if seg_o == seg_n:
-                continue
-            if abs(len(seg_o) - len(seg_n)) > 8:
-                continue
-            dist = _levenshtein(seg_o, seg_n)
-            if dist <= 2 or (seg_o in seg_n or seg_n in seg_o):
-                score = dist
-                if best is None or score < best[1]:
-                    best = (ap, score)
-        if best:
-            ap = best[0]
-            pairs.append((rp, ap))
-            used_add.add(ap)
-            used_rem.add(rp)
-    remain_add = added - used_add
-    remain_rem = removed - used_rem
-    return pairs, remain_add, remain_rem
-
-
-def diff_snapshots(
-    old_schema: dict, new_schema: dict
-) -> Tuple[List[dict], bool, List[str]]:
+def resolve_snapshot_path(repo: Path, contract_id: str, spec: str) -> Path:
     """
-    Returns (classified_change_dicts, any_breaking, human_diff_lines).
+    Resolve evaluator-facing snapshot spec to an existing file.
+
+    Accepts: absolute path, ``schema_snapshots/...`` relative to repo, or bare
+    ``YYYYMMDDTHHMMSSZ.yaml`` under ``schema_snapshots/{contract_id}/``.
     """
-    o_map = flatten_contract_schema(old_schema)
-    n_map = flatten_contract_schema(new_schema)
-    o_paths, n_paths = set(o_map), set(n_map)
-    added, removed = n_paths - o_paths, o_paths - n_paths
-    rename_pairs, added, removed = _pair_suspected_renames(o_map, n_map, removed, added)
-    human_lines: List[str] = []
-    changes: List[dict] = []
-    breaking = False
+    raw = (spec or "").strip()
+    if not raw:
+        raise ValueError("empty snapshot path")
+    p = Path(raw)
+    if p.is_file():
+        return p.resolve()
+    cand = (repo / raw).resolve()
+    if cand.is_file():
+        return cand
+    under = (repo / "schema_snapshots" / contract_id / Path(raw).name).resolve()
+    if under.is_file():
+        return under
+    raise FileNotFoundError(
+        f"Snapshot not found for {spec!r} (tried absolute, repo-relative, schema_snapshots/{contract_id}/)"
+    )
 
-    for rp, ap in rename_pairs:
-        human_lines.append(f"~ RENAME? {rp} → {ap} (heuristic; verify in VCS)")
-        breaking = True
-        changes.append(
-            {
-                "path": f"{rp}→{ap}",
-                "change_type": "RENAME_COLUMN_SUSPECTED",
-                "example": f"{rp.split('.')[-1]} → {ap.split('.')[-1]}",
-                "backward_compatible": False,
-                "required_action": "Deprecation with alias column; notify via blast radius; ≥1 sprint before removal.",
-                "taxonomy_row": "Rename column",
-                "severity": "HIGH",
-            }
+
+def _snapshot_in_since_window(path: Path, payload: dict, cutoff: datetime) -> bool:
+    ts = payload.get("snapshot_timestamp")
+    if isinstance(ts, str):
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc) >= cutoff
+        except ValueError:
+            pass
+    parsed = _parse_snapshot_time(path.name)
+    if parsed is not None:
+        return parsed >= cutoff
+    return True
+
+
+def load_registry_subscribers_line(repo: Path, contract_id: str) -> str:
+    name = CONTRACT_YAML_BY_ID.get(contract_id)
+    if not name:
+        return "none listed"
+    p = repo / "generated_contracts" / name
+    if not p.is_file():
+        return "none listed"
+    try:
+        with p.open(encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+        if not isinstance(doc, dict):
+            return "none listed"
+        lin = doc.get("lineage") or {}
+        subs = lin.get("registry_subscribers") or []
+        if not isinstance(subs, list) or not subs:
+            return "none listed"
+        return ", ".join(str(s) for s in subs)
+    except Exception:
+        return "none listed"
+
+
+def build_migration_checklist(breaking_changes: List[dict], subscribers_line: str) -> List[str]:
+    items: List[str] = []
+    if not breaking_changes:
+        items.append(
+            "[OK] No field-level BREAKING verdicts in this pair — backward readers likely safe for this diff."
         )
-
-    for p in sorted(added):
-        rec = n_map[p]
-        nullable = rec.required is not True
-        human_lines.append(f"+ ADD {field_to_human_line(p, rec)}")
-        if nullable:
-            changes.append(
-                {
-                    "path": p,
-                    "change_type": "ADD_COLUMN_NULLABLE",
-                    "example": f"ADD COLUMN {p} (nullable)",
-                    "backward_compatible": True,
-                    "required_action": "None. Downstream consumers can ignore the new column.",
-                    "taxonomy_row": "Add nullable column",
-                    "severity": "LOW",
-                }
-            )
-        else:
-            breaking = True
-            changes.append(
-                {
-                    "path": p,
-                    "change_type": "ADD_COLUMN_NOT_NULL",
-                    "example": f"ADD COLUMN {p} NOT NULL",
-                    "backward_compatible": False,
-                    "required_action": "Coordinate producers; default or migration; block deployment until producers updated.",
-                    "taxonomy_row": "Add non-nullable column",
-                    "severity": "CRITICAL",
-                }
-            )
-
-    for p in sorted(removed):
-        rec = o_map[p]
-        human_lines.append(f"- DROP {field_to_human_line(p, rec)}")
-        breaking = True
-        changes.append(
-            {
-                "path": p,
-                "change_type": "DROP_COLUMN",
-                "example": f"DROP COLUMN {p}",
-                "backward_compatible": False,
-                "required_action": "Deprecation ≥2 sprints; blast radius report; written consumer acknowledgement.",
-                "taxonomy_row": "Remove column",
-                "severity": "CRITICAL",
-            }
+        items.append(
+            "[RECOMMENDED] Still verify downstream dbt / consumers if you added enums or widened types."
         )
-
-    for p in sorted(o_paths & n_paths):
-        old, new = o_map[p], n_map[p]
-        if old.fingerprint() == new.fingerprint():
-            continue
-        human_lines.append(f"~ MODIFY {p}")
-        human_lines.append(f"    - {field_to_human_line(p, old)}")
-        human_lines.append(f"    + {field_to_human_line(p, new)}")
-
-        if old.required is False and new.required is True:
-            breaking = True
-            changes.append(
-                {
-                    "path": p,
-                    "change_type": "REQUIRED_STRENGTHENED",
-                    "example": f"{p}: optional → required",
-                    "backward_compatible": False,
-                    "required_action": "Treat as non-nullable add: coordinate producers and defaults.",
-                    "taxonomy_row": "Add non-nullable column (semantic)",
-                    "severity": "CRITICAL",
-                }
-            )
-
-        ec = classify_enum_change(old.enum, new.enum)
-        if ec:
-            if not ec["backward_compatible"]:
-                breaking = True
-            changes.append({**ec, "path": p})
-
-        tc = classify_type_change(old, new)
-        if tc["change_type"] not in ("TYPE_UNCHANGED",):
-            if not tc["backward_compatible"]:
-                breaking = True
-            changes.append({**tc, "path": p})
-
-        rc = classify_range_change(old, new)
-        if rc:
-            if not rc["backward_compatible"]:
-                breaking = True
-            changes.append({**rc, "path": p})
-
-        if old.format != new.format or old.pattern != new.pattern:
-            breaking = True
-            changes.append(
-                {
-                    "path": p,
-                    "change_type": "FORMAT_OR_PATTERN_CHANGED",
-                    "example": f"format {old.format!r}→{new.format!r}, pattern {old.pattern!r}→{new.pattern!r}",
-                    "backward_compatible": False,
-                    "required_action": "Validate payloads; versioning or dual-read period.",
-                    "taxonomy_row": "Format / validation change",
-                    "severity": "HIGH",
-                }
-            )
-
-    return changes, breaking, human_lines
-
-
-def _levenshtein(a: str, b: str) -> int:
-    if a == b:
-        return 0
-    la, lb = len(a), len(b)
-    dp = list(range(lb + 1))
-    for i in range(1, la + 1):
-        prev, dp[0] = dp[0], i
-        for j in range(1, lb + 1):
-            cur = dp[j]
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            dp[j] = min(dp[j] + 1, dp[j - 1] + 1, prev + cost)
-            prev = cur
-    return dp[lb]
-
-
-def build_migration_impact(
-    contract_id: str,
-    pairwise_breaking: List[dict],
-    repo: Path,
-    human_readable_diff: str,
-) -> dict:
-    blast = blast_radius_from_lineage(repo)
-    downstream = load_yaml_contract_lineage(repo, contract_id)
-    consumers = []
-    for d in downstream:
-        if not isinstance(d, dict):
-            continue
-        cid = d.get("id") or d.get("consumer_node_id")
-        consumers.append(
-            {
-                "consumer_ref": str(cid) if cid else "unknown",
-                "description": d.get("description", ""),
-                "breaking_if_changed": d.get("breaking_if_changed") or [],
-            }
+        return items
+    for ch in breaking_changes:
+        field = ch.get("field", "?")
+        tax = ch.get("taxonomy", "?")
+        items.append(
+            f"[REQUIRED] Notify subscribers ({field}, taxonomy={tax}): {subscribers_line}"
         )
-    failure_modes = []
-    for c in consumers[:40]:
-        failure_modes.append(
-            {
-                "consumer": c["consumer_ref"],
-                "failure_mode": "Downstream models/tests expecting removed fields, stricter types, or old enums will fail at read time.",
-                "mitigation": "Version the contract, add compatibility views, or schedule coordinated release with feature flags.",
-            }
-        )
-    if not failure_modes:
-        failure_modes.append(
-            {
-                "consumer": "unknown_downstream",
-                "failure_mode": "Any implicit JSON consumer (dbt, notebooks, services) may break on strict parsing.",
-                "mitigation": "Run ValidationRunner; publish migration impact; require PR comments from owning teams.",
-            }
-        )
+        items.append("[REQUIRED] Write migration script in outputs/migrate/ before deploying")
+        items.append("[REQUIRED] Re-run ValidationRunner after migration to confirm clean")
+    return items
 
-    checklist = [
-        "Freeze producer deployments until rollback path is validated.",
-        "Notify consumers listed in blast_radius and lineage.downstream.",
-        "Ship dual-write or additive schema phase if applicable.",
-        "Run ContractGenerator + ValidationRunner on migrated sample data.",
-        "Reset or re-baseline schema_snapshots/baselines.json where statistical contracts apply.",
-        "Obtain written acknowledgement (ticket/PR) for DROP or breaking TYPE changes.",
-        "Schedule removal only after deprecation window (≥2 sprints for DROP).",
+
+def build_rollback_plan(
+    has_breaking: bool, snapshot_old: str, contract_id: str
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Human summary string (legacy) plus structured steps for rubric / PDF / evaluators.
+    """
+    detail: Dict[str, Any] = {"anchor_snapshot": None, "steps": []}
+    if has_breaking:
+        detail["anchor_snapshot"] = snapshot_old
+        detail["steps"] = [
+            f"Check out contract schema from snapshot file schema_snapshots/{contract_id}/{snapshot_old}.",
+            "Revert generated_contracts YAML and dbt models to the commit that produced that snapshot (or regenerate from frozen inputs).",
+            "Notify all registry subscribers for this contract_id; pause ENFORCE gates until rollback is verified.",
+            "Run: python contracts/runner.py --contract generated_contracts/<matching>.yaml --data <stable jsonl> --mode AUDIT.",
+            "Open a new migration PR before re-attempting the breaking schema promotion.",
+        ]
+        summary = (
+            f"Rollback to snapshot {snapshot_old!r} under contract {contract_id!r}; "
+            "restore prior artifacts before retrying promotion."
+        )
+        return summary, detail
+    detail["steps"] = [
+        "No rollback required — compatibility verdict indicates no BREAKING-classified field transitions.",
     ]
-    rollback = [
-        "Revert producer commit that emitted the new schema; restore prior ContractGenerator output.",
-        "Restore previous schema snapshot YAML from schema_snapshots/{contract_id}/ for documentation.",
-        "Re-ingest last known-good JSONL export if data was transformed.",
-        "Re-run SchemaEvolutionAnalyzer to confirm zero breaking diffs against prior snapshot.",
-    ]
-    return {
-        "migration_impact_id": str(uuid.uuid4()),
-        "contract_id": contract_id,
-        "generated_at": utc_now_iso(),
-        "compatibility_verdict": "BREAKING",
-        "human_readable_diff": human_readable_diff,
-        "pairwise_breaking_transitions": pairwise_breaking,
-        "blast_radius": blast,
-        "lineage_downstream_from_contract": downstream[:50],
-        "per_consumer_failure_mode_analysis": failure_modes,
-        "ordered_migration_checklist": checklist,
-        "rollback_plan": rollback,
-    }
+    return "No rollback required.", detail
 
 
 def run_analyzer(
@@ -463,114 +394,262 @@ def run_analyzer(
     contract_id: str,
     since: str,
     output_report: Path,
-    migration_dir: Path,
+    *,
+    snapshot_old_spec: Optional[str] = None,
+    snapshot_new_spec: Optional[str] = None,
+    write_migration_impact: bool = True,
 ) -> int:
     cutoff = parse_since_arg(since)
-    all_files = list_snapshot_files(repo, contract_id)
-    if not all_files:
-        print(f"No schema snapshots under schema_snapshots/{contract_id}/. Run ContractGenerator first.", file=sys.stderr)
-        return 2
+    snap_dir = repo / "schema_snapshots" / contract_id
+    path_old: Path
+    path_new: Path
 
-    enriched: List[Tuple[Path, dict, datetime]] = []
-    for p in all_files:
-        payload = load_snapshot_file(p)
-        ts = snapshot_file_datetime(p, payload)
-        enriched.append((p, payload, ts))
-    enriched.sort(key=lambda x: x[2])
-
-    in_window = [(p, pl, ts) for p, pl, ts in enriched if ts >= cutoff]
-    if len(in_window) < 2:
-        # Fall back: diff last two snapshots overall (still report window metadata)
-        if len(enriched) < 2:
-            print(
-                "Need at least two snapshots to diff consecutive versions. Run ContractGenerator twice.",
-                file=sys.stderr,
-            )
-            return 3
-        pair_source = "last_two_global_fallback"
-        to_diff = enriched[-2:]
+    if snapshot_old_spec and snapshot_new_spec:
+        try:
+            path_old = resolve_snapshot_path(repo, contract_id, snapshot_old_spec)
+            path_new = resolve_snapshot_path(repo, contract_id, snapshot_new_spec)
+        except (OSError, ValueError) as exc:
+            doc = {"status": "SNAPSHOT_PATH_ERROR", "error": str(exc)}
+            output_report.parent.mkdir(parents=True, exist_ok=True)
+            output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        if path_old == path_new:
+            doc = {"status": "SNAPSHOT_PATH_ERROR", "error": "snapshot-old and snapshot-new must differ"}
+            output_report.parent.mkdir(parents=True, exist_ok=True)
+            output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+            return 1
+        pair_key = "explicit_cli_pair"
     else:
-        pair_source = "consecutive_within_since_window"
-        to_diff = in_window
+        if snapshot_old_spec or snapshot_new_spec:
+            doc = {
+                "status": "SNAPSHOT_PATH_ERROR",
+                "error": "Provide both --snapshot-old and --snapshot-new, or neither",
+            }
+            output_report.parent.mkdir(parents=True, exist_ok=True)
+            output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+            return 1
+        pair_key = "auto_newest_in_window"
+        if not snap_dir.is_dir():
+            doc = {"status": "INSUFFICIENT_SNAPSHOTS", "snapshots_found": 0}
+            output_report.parent.mkdir(parents=True, exist_ok=True)
+            output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+            print(f"Wrote {output_report} (insufficient snapshots)", file=sys.stderr)
+            return 0
 
-    pairwise_evolution: List[dict] = []
-    breaking_pairs: List[dict] = []
-    migration_files: List[str] = []
+        all_yaml = sorted(
+            [p for p in snap_dir.iterdir() if p.is_file() and p.suffix.lower() in (".yaml", ".yml")],
+            key=_snapshot_sort_key,
+        )
 
-    for i in range(len(to_diff) - 1):
-        p_old, pl_old, ts_old = to_diff[i]
-        p_new, pl_new, ts_new = to_diff[i + 1]
-        s_old = pl_old.get("schema") or {}
-        s_new = pl_new.get("schema") or {}
-        changes, breaking, human_lines = diff_snapshots(s_old, s_new)
-        block = {
-            "from_snapshot_file": str(p_old.relative_to(repo)),
-            "to_snapshot_file": str(p_new.relative_to(repo)),
-            "from_timestamp": ts_old.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "to_timestamp": ts_new.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "human_readable_diff": "\n".join(human_lines) if human_lines else "(no structural diff)",
-            "classified_changes": changes,
-            "breaking_change": breaking,
-            "summary_counts": {
-                "changes_detected": len(changes),
-                "paths_old": len(flatten_contract_schema(s_old)),
-                "paths_new": len(flatten_contract_schema(s_new)),
-            },
-        }
-        pairwise_evolution.append(block)
-        if breaking:
-            breaking_pairs.append(block)
+        valid_all: List[Path] = []
+        payloads: Dict[str, dict] = {}
+        for p in all_yaml:
+            payload = _load_snapshot_payload(p)
+            if payload is None:
+                continue
+            valid_all.append(p)
+            payloads[str(p)] = payload
 
-    breaking_any = bool(breaking_pairs)
-    if breaking_any:
-        ts_tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        safe_id = re.sub(r"[^a-zA-Z0-9._-]+", "_", contract_id)
-        mig_path = migration_dir / f"migration_impact_{safe_id}_{ts_tag}.json"
-        migration_dir.mkdir(parents=True, exist_ok=True)
-        hr_diff = "\n\n--- transition ---\n\n".join(b["human_readable_diff"] for b in breaking_pairs)
-        doc = build_migration_impact(contract_id, breaking_pairs, repo, hr_diff)
-        with mig_path.open("w", encoding="utf-8") as f:
-            json.dump(doc, f, indent=2, ensure_ascii=False)
-        migration_files.append(str(mig_path.relative_to(repo)))
+        if len(valid_all) < 2:
+            doc = {"status": "INSUFFICIENT_SNAPSHOTS", "snapshots_found": len(valid_all)}
+            output_report.parent.mkdir(parents=True, exist_ok=True)
+            output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+            print(f"Wrote {output_report} (insufficient snapshots)", file=sys.stderr)
+            return 0
+
+        in_window = [
+            p
+            for p in valid_all
+            if _snapshot_in_since_window(p, payloads[str(p)], cutoff)
+        ]
+        pair_pool = in_window if len(in_window) >= 2 else valid_all
+        path_old, path_new = pair_pool[-2], pair_pool[-1]
+
+    pl_old = _load_snapshot_payload(path_old)
+    pl_new = _load_snapshot_payload(path_new)
+    if pl_old is None or pl_new is None:
+        doc = {"status": "INSUFFICIENT_SNAPSHOTS", "snapshots_found": 0}
+        output_report.parent.mkdir(parents=True, exist_ok=True)
+        output_report.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+        print("ERROR: could not load snapshot pair; wrote insufficient report", file=sys.stderr)
+        return 0
+
+    schema_old = pl_old.get("schema") or {}
+    schema_new = pl_new.get("schema") or {}
+    if not isinstance(schema_old, dict):
+        schema_old = {}
+    if not isinstance(schema_new, dict):
+        schema_new = {}
+
+    old_map = schema_to_field_clauses(schema_old)
+    new_map = schema_to_field_clauses(schema_new)
+    all_fields = sorted(set(old_map.keys()) | set(new_map.keys()))
+
+    changes: List[Dict[str, Any]] = []
+    breaking_count = 0
+    compatible_count = 0
+
+    for field in all_fields:
+        o_clause = old_map.get(field)
+        n_clause = new_map.get(field)
+        try:
+            verdict, reason, tool_eq, taxonomy = classify_change(field, o_clause, n_clause)
+        except Exception as exc:
+            print(f"WARN: classify_change({field!r}): {exc}", file=sys.stderr)
+            verdict, reason, tool_eq, taxonomy = (
+                "BREAKING",
+                f"Classification error: {exc}",
+                _tool_dict("type_narrowing"),
+                "classification_error",
+            )
+        changes.append(
+            {
+                "field": field,
+                "taxonomy": taxonomy,
+                "verdict": verdict,
+                "reason": reason,
+                "tool_equivalents": tool_eq,
+            }
+        )
+        if verdict == "BREAKING":
+            breaking_count += 1
+        else:
+            compatible_count += 1
+
+    breaking_changes = [c for c in changes if c["verdict"] == "BREAKING"]
+    taxonomy_counts = dict(Counter(c["taxonomy"] for c in changes))
+    subs = load_registry_subscribers_line(repo, contract_id)
+    checklist = build_migration_checklist(breaking_changes, subs)
+    rollback_summary, rollback_detail = build_rollback_plan(bool(breaking_changes), path_old.name, contract_id)
+
+    analyzed_at = utc_now_iso()
+    compatibility_verdict = (
+        "BREAKING_CHANGE_DETECTED" if breaking_count else "NO_BREAKING_CHANGES"
+    )
+    confluent_style = (
+        "BACKWARD_INCOMPATIBLE" if breaking_count else "BACKWARD_COMPATIBLE"
+    )
+
+    def _rel_to_repo(p: Path) -> str:
+        try:
+            return str(p.resolve().relative_to(repo.resolve()))
+        except ValueError:
+            return str(p.resolve())
+
+    mi_slug = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     report = {
-        "report_id": str(uuid.uuid4()),
         "contract_id": contract_id,
-        "generated_at": utc_now_iso(),
-        "since_cutoff_utc": cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "pair_selection": pair_source,
-        "snapshots_total": len(enriched),
-        "snapshots_in_since_window": len(in_window),
-        "snapshots_considered": [{"file": str(p.relative_to(repo)), "timestamp_utc": ts.strftime("%Y-%m-%dT%H:%M:%SZ")} for p, _, ts in to_diff],
-        "pairwise_evolution": pairwise_evolution,
-        "breaking_change_detected": breaking_any,
-        "migration_impact_reports": migration_files,
+        "analyzed_at": analyzed_at,
+        "pair_selection_mode": pair_key,
+        "snapshot_old": path_old.name,
+        "snapshot_new": path_new.name,
+        "snapshot_paths_relative": {
+            "old": _rel_to_repo(path_old),
+            "new": _rel_to_repo(path_new),
+        },
+        "compatibility_verdict": compatibility_verdict,
+        "schema_registry_style": {
+            "backward_readers": confluent_style,
+            "note": "Informal Confluent-style label; see tool_equivalents per change for dbt/Pact.",
+        },
+        "taxonomy_counts": taxonomy_counts,
+        "total_changes": len(changes),
+        "breaking_count": breaking_count,
+        "compatible_count": compatible_count,
+        "changes": changes,
+        "migration_checklist": checklist,
+        "rollback_plan": rollback_summary,
+        "rollback_plan_detail": rollback_detail,
+        "cli_reproduce_diff": (
+            "python contracts/schema_analyzer.py "
+            f"--contract-id {contract_id} "
+            f"--snapshot-old {path_old.name} "
+            f"--snapshot-new {path_new.name} "
+            f"-o validation_reports/schema_evolution_diff.json"
+        ),
     }
-    output_report.parent.mkdir(parents=True, exist_ok=True)
-    with output_report.open("w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, ensure_ascii=False)
 
+    output_report.parent.mkdir(parents=True, exist_ok=True)
+    output_report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Wrote {output_report}", file=sys.stderr)
-    if migration_files:
-        print(f"Wrote migration impact: {migration_files}", file=sys.stderr)
+
+    if write_migration_impact:
+        mi_path = output_report.parent / f"migration_impact_{contract_id}_{mi_slug}.json"
+        migration_doc = {
+            "contract_id": contract_id,
+            "generated_at": analyzed_at,
+            "compatibility_verdict": compatibility_verdict,
+            "snapshot_pair": {"old": path_old.name, "new": path_new.name},
+            "breaking_changes": breaking_changes,
+            "taxonomy_counts": taxonomy_counts,
+            "migration_checklist": checklist,
+            "rollback_plan": rollback_summary,
+            "rollback_plan_detail": rollback_detail,
+            "registry_subscribers_hint": subs,
+            "cli_reproduce_diff": report["cli_reproduce_diff"],
+        }
+        mi_path.write_text(json.dumps(migration_doc, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Wrote {mi_path}", file=sys.stderr)
+        try:
+            mi_rel = str(mi_path.resolve().relative_to(repo.resolve()))
+        except ValueError:
+            mi_rel = str(mi_path.resolve())
+        report["migration_impact_file"] = mi_rel
+        report["migration_impact_reports"] = [mi_rel]
+        output_report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Updated {output_report} (links migration_impact_file)", file=sys.stderr)
+
+    return 0
+
+
+def list_snapshots_for_contract(repo: Path, contract_id: str) -> int:
+    d = repo / "schema_snapshots" / contract_id
+    if not d.is_dir():
+        print(f"No snapshot directory: {d}", file=sys.stderr)
+        return 1
+    paths = sorted(
+        [p for p in d.iterdir() if p.is_file() and p.suffix.lower() in (".yaml", ".yml")],
+        key=_snapshot_sort_key,
+    )
+    for p in paths:
+        pl = _load_snapshot_payload(p)
+        ts = (pl or {}).get("snapshot_timestamp") or p.stem
+        print(f"{p.name}\t{ts}")
     return 0
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SchemaEvolutionAnalyzer — Phase 3")
-    parser.add_argument("--contract-id", required=True, help="Data contract id (YAML id: field)")
+    parser.add_argument("--contract-id", required=True, help="Data contract id (schema_snapshots subfolder)")
     parser.add_argument("--since", default="7 days ago", help='e.g. "7 days ago" or ISO date')
     parser.add_argument(
-        "--output",
-        type=Path,
-        default=REPO_ROOT / "validation_reports" / "schema_evolution.json",
-        help="Evolution report JSON path",
+        "--snapshot-old",
+        default=None,
+        help="Explicit older snapshot (filename under schema_snapshots/<id>/ or path)",
     )
     parser.add_argument(
-        "--migration-dir",
+        "--snapshot-new",
+        default=None,
+        help="Explicit newer snapshot (use with --snapshot-old for reproducible diffs)",
+    )
+    parser.add_argument(
+        "--list-snapshots",
+        action="store_true",
+        help="Print available snapshot YAML files for --contract-id and exit",
+    )
+    parser.add_argument(
+        "--no-migration-impact-file",
+        action="store_true",
+        help="Do not write validation_reports/migration_impact_<contract>_<ts>.json",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
         type=Path,
-        default=REPO_ROOT / "validation_reports",
-        help="Directory for migration_impact_*.json",
+        default=REPO_ROOT / "validation_reports" / "schema_evolution.json",
+        help="Primary evolution analysis JSON path",
     )
     parser.add_argument(
         "--repo-root",
@@ -579,9 +658,21 @@ def main() -> None:
         help="Repository root (default: parent of contracts/)",
     )
     args = parser.parse_args()
-    out = args.output if args.output.is_absolute() else args.repo_root / args.output
-    mig = args.migration_dir if args.migration_dir.is_absolute() else args.repo_root / args.migration_dir
-    raise SystemExit(run_analyzer(args.repo_root, args.contract_id, args.since, out, mig))
+    repo = args.repo_root if args.repo_root.is_absolute() else REPO_ROOT / args.repo_root
+    out = args.output if args.output.is_absolute() else repo / args.output
+    if args.list_snapshots:
+        raise SystemExit(list_snapshots_for_contract(repo, args.contract_id))
+    raise SystemExit(
+        run_analyzer(
+            repo,
+            args.contract_id,
+            args.since,
+            out,
+            snapshot_old_spec=args.snapshot_old,
+            snapshot_new_spec=args.snapshot_new,
+            write_migration_impact=not args.no_migration_impact_file,
+        )
+    )
 
 
 if __name__ == "__main__":

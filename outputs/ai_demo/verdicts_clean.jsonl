@@ -1,0 +1,10 @@
+{"application_id": "APEX-1001", "recommendation": "APPROVE", "rationale": "Within policy"}
+{"application_id": "APEX-1002", "recommendation": "REFER", "rationale": "Manual review"}
+{"application_id": "APEX-1003", "recommendation": "DECLINE", "rationale": "Out of scope"}
+{"application_id": "APEX-1004", "recommendation": "APPROVE", "rationale": "Within policy"}
+{"application_id": "APEX-1005", "recommendation": "APPROVE", "rationale": "Within policy"}
+{"application_id": "APEX-1006", "recommendation": "REFER", "rationale": "Edge case"}
+{"application_id": "APEX-1007", "recommendation": "DECLINE", "rationale": "High risk"}
+{"application_id": "APEX-1008", "recommendation": "APPROVE", "rationale": "Within policy"}
+{"application_id": "APEX-1009", "recommendation": "APPROVE", "rationale": "Within policy"}
+{"application_id": "APEX-1010", "recommendation": "REFER", "rationale": "Docs pending"}

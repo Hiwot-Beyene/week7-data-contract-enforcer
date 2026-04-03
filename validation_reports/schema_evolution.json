@@ -1,0 +1,143 @@
+{
+  "contract_id": "week3-document-refinery-extractions",
+  "analyzed_at": "2026-04-04T10:11:26Z",
+  "snapshot_old": "20260404T094248Z.yaml",
+  "snapshot_new": "20260404T094322Z.yaml",
+  "total_changes": 13,
+  "breaking_count": 0,
+  "compatible_count": 13,
+  "changes": [
+    {
+      "field": "doc_id",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "entities",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "extracted_at",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "extracted_facts",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "extracted_facts[].confidence",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "extracted_facts[].fact_id",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "extraction_model",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "processing_time_ms",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "source_hash",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "source_path",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "token_count",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "token_count.input",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    },
+    {
+      "field": "token_count.output",
+      "verdict": "COMPATIBLE",
+      "reason": "No material change",
+      "tool_equivalents": {
+        "confluent": "No registration impact for this field",
+        "dbt": "No schema test delta required for this field",
+        "pact": "No consumer update required for this declaration"
+      }
+    }
+  ],
+  "migration_checklist": [],
+  "rollback_plan": "No rollback required."
+}
