@@ -1,0 +1,135 @@
+{
+  "report_version": "2.3.0",
+  "report_artifact_stem": "stakeholder__week3-document-refinery-extractions__20260405T002528Z",
+  "pipeline_contract_id": "week3-document-refinery-extractions",
+  "report_id": "9b28bc70-2b02-46eb-a337-60b4d447c85f",
+  "contract_id": "week3-document-refinery-extractions",
+  "snapshot_id": "0a2bada71c4cde01e1957412b96dc3fadae667ebe34f95bcacc25e4e4e0bf310",
+  "run_timestamp": "2026-04-05T00:25:28Z",
+  "total_checks": 19,
+  "passed": 17,
+  "failed": 2,
+  "warned": 0,
+  "errored": 0,
+  "health_score": 49.47,
+  "data_health_score": 49.47,
+  "health_narrative": "The score is 49 out of 100. 2 issue(s) were marked critical\u2014those are treated as highest risk and lower the score sharply. Overall, 17 of 19 checks passed.",
+  "health_narrative_plain": "The score is 49 out of 100. 2 issue(s) were marked critical\u2014those are treated as highest risk and lower the score sharply. Overall, 17 of 19 checks passed.",
+  "health_narrative_technical": "Pass ratio 89.5% over 19 checks; 2 CRITICAL failure(s) each reduce the score by 20 points (documentation formula).",
+  "primary_action": "Stop and fix the critical data problems listed in this report before anyone uses this dataset for important decisions; then ask your team to run the automatic data check again.",
+  "critical_fail_count": 2,
+  "recommended_actions": [
+    "Directive [week3.doc_id.unique] column='doc_id': modify `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/generated_contracts/week3-document-refinery-extractions.yaml` clause **schema.doc_id (required, format: uuid, pattern, unique)** or fix JSONL at servers.local.path declared in that YAML; then `python contracts/runner.py` for contract `week3-document-refinery-extractions`.",
+    "Directive [week3.quality.doc_id.duplicate_count] column='doc_id': modify `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/generated_contracts/week3-document-refinery-extractions.yaml` clause **schema.doc_id (required, format: uuid, pattern, unique)** or fix JSONL at servers.local.path declared in that YAML; then `python contracts/runner.py` for contract `week3-document-refinery-extractions`.",
+    "Maintain drift baselines under `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/schema_snapshots/baselines.json`; use AUDIT until baselines stabilize, then WARN/ENFORCE."
+  ],
+  "recommended_actions_plain": [
+    "Check **week3.doc_id.unique**: update data or edit **`generated_contracts/week3-document-refinery-extractions.yaml`** at schema.doc_id (required, format: uuid, pattern, unique), then re-run validation.",
+    "Check **week3.quality.doc_id.duplicate_count**: update data or edit **`generated_contracts/week3-document-refinery-extractions.yaml`** at schema.doc_id (required, format: uuid, pattern, unique), then re-run validation.",
+    "When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing."
+  ],
+  "registry_gap_count": 0,
+  "registry_gap_alert": false,
+  "registry_unavailable": false,
+  "top_3": [
+    {
+      "check_id": "week3.doc_id.unique",
+      "column_name": "doc_id",
+      "check_type": "unique",
+      "status": "FAIL",
+      "actual_value": "duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']",
+      "expected": "unique",
+      "severity": "CRITICAL",
+      "records_failing": 24,
+      "sample_failing": [
+        "9950bcde-3699-55e9-b94f-2f15bdbe9886"
+      ],
+      "message": "Duplicate values for 'doc_id'.",
+      "contract_id": "week3-document-refinery-extractions",
+      "plain_language": "The data field \u201cdoc_id\u201d in the week3 subsystem did not pass a unique rule. We expected: unique. What we saw: duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']. Downstream subscribers affected: week4-cartographer, week6-warehouse-dbt, week7-validation-runner. Records failing: 24."
+    },
+    {
+      "check_id": "week3.quality.doc_id.duplicate_count",
+      "column_name": "doc_id",
+      "check_type": "unique",
+      "status": "FAIL",
+      "actual_value": "duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']",
+      "expected": "unique",
+      "severity": "CRITICAL",
+      "records_failing": 24,
+      "sample_failing": [
+        "9950bcde-3699-55e9-b94f-2f15bdbe9886"
+      ],
+      "message": "duplicate_count(doc_id) = 0",
+      "contract_id": "week3-document-refinery-extractions",
+      "plain_language": "The data field \u201cdoc_id\u201d in the week3 subsystem did not pass a unique rule. We expected: unique. What we saw: duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']. Downstream subscribers affected: week4-cartographer, week6-warehouse-dbt, week7-validation-runner. Records failing: 24."
+    }
+  ],
+  "schema_evolution_summary": {
+    "breaking_changes_detected": 1,
+    "compatible_changes_detected": 15,
+    "requires_migration": true
+  },
+  "schema_evolution_plain": "The latest schema comparison found changes that can break downstream consumers. Before you ship, align with the teams that read this data and follow your migration checklist.",
+  "ai_risk_summary": {
+    "embedding_drift_status": "PASS",
+    "drift_score": 0.0,
+    "output_violation_rate": 0.0,
+    "output_trend": "stable",
+    "requires_attention": false
+  },
+  "ai_risk_plain": "AI-related checks did not report urgent problems on this run. Keep running them periodically if models or prompts change.",
+  "report_sections": [
+    {
+      "key": "action",
+      "title": "1. What you should do next",
+      "content": "Stop and fix the critical data problems listed in this report before anyone uses this dataset for important decisions; then ask your team to run the automatic data check again."
+    },
+    {
+      "key": "health",
+      "title": "2. Data Health Score",
+      "content": "The Data Health Score is 49 out of 100. The score is 49 out of 100. 2 issue(s) were marked critical\u2014those are treated as highest risk and lower the score sharply. Overall, 17 of 19 checks passed.",
+      "score": 49.47,
+      "technical_note": "Pass ratio 89.5% over 19 checks; 2 CRITICAL failure(s) each reduce the score by 20 points (documentation formula)."
+    },
+    {
+      "key": "snapshot",
+      "title": "3. Results at a glance",
+      "content": "This run executed 19 automatic checks. 17 passed, 2 failed, and 0 produced warnings. Failed rows are the ones that need human follow-up."
+    },
+    {
+      "key": "issues",
+      "title": "4. Main issues in plain language",
+      "content": "The data field \u201cdoc_id\u201d in the week3 subsystem did not pass a unique rule. We expected: unique. What we saw: duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']. Downstream subscribers affected: week4-cartographer, week6-warehouse-dbt, week7-validation-runner. Records failing: 24.\n\nThe data field \u201cdoc_id\u201d in the week3 subsystem did not pass a unique rule. We expected: unique. What we saw: duplicate_values=['9950bcde-3699-55e9-b94f-2f15bdbe9886']. Downstream subscribers affected: week4-cartographer, week6-warehouse-dbt, week7-validation-runner. Records failing: 24."
+    },
+    {
+      "key": "follow_up",
+      "title": "5. Schema, AI signals, and recommended follow-up",
+      "content": "Schema: The latest schema comparison found changes that can break downstream consumers. Before you ship, align with the teams that read this data and follow your migration checklist.\n\nAI monitoring: AI-related checks did not report urgent problems on this run. Keep running them periodically if models or prompts change.\n\nSuggested next steps:\n\n\u2022 Check **week3.doc_id.unique**: update data or edit **`generated_contracts/week3-document-refinery-extractions.yaml`** at schema.doc_id (required, format: uuid, pattern, unique), then re-run validation.\n\n\u2022 Check **week3.quality.doc_id.duplicate_count**: update data or edit **`generated_contracts/week3-document-refinery-extractions.yaml`** at schema.doc_id (required, format: uuid, pattern, unique), then re-run validation.\n\n\u2022 When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing."
+    }
+  ],
+  "generation_sources": [
+    {
+      "kind": "validation_run",
+      "detail": "Counts, pass/fail, and per-check rows came from the validation JSON file passed to this generator.",
+      "report_id": "9b28bc70-2b02-46eb-a337-60b4d447c85f"
+    },
+    {
+      "kind": "schema_evolution",
+      "path": "validation_reports/schema_evolution.json",
+      "read": true
+    },
+    {
+      "kind": "ai_extensions",
+      "path": "validation_reports/ai_extensions.json",
+      "read": true
+    },
+    {
+      "kind": "contract_registry",
+      "path": "/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/contract_registry/subscriptions.yaml",
+      "read": true
+    }
+  ],
+  "auto_generated": true,
+  "generated_at": "2026-04-05T00:27:28Z"
+}

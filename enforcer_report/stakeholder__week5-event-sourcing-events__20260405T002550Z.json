@@ -1,0 +1,102 @@
+{
+  "report_version": "2.3.0",
+  "report_artifact_stem": "stakeholder__week5-event-sourcing-events__20260405T002550Z",
+  "pipeline_contract_id": "week5-event-sourcing-events",
+  "report_id": "ef167b02-0302-4259-94a4-e9338817546a",
+  "contract_id": "week5-event-sourcing-events",
+  "snapshot_id": "31c16cb08d6213c7e32d62991ee94c995656d29bb5dded9d53c68fbcb4af000d",
+  "run_timestamp": "2026-04-05T00:25:50Z",
+  "total_checks": 17,
+  "passed": 17,
+  "failed": 0,
+  "warned": 0,
+  "errored": 0,
+  "health_score": 100.0,
+  "data_health_score": 100.0,
+  "health_narrative": "The score is 100 out of 100. Most checks passed (17 of 17). This usually means the dataset looks healthy for routine use.",
+  "health_narrative_plain": "The score is 100 out of 100. Most checks passed (17 of 17). This usually means the dataset looks healthy for routine use.",
+  "health_narrative_technical": "Pass ratio 100.0% over 17 checks; 0 CRITICAL failure(s) each reduce the score by 20 points (documentation formula).",
+  "primary_action": "No blocking action is required from this report: keep your usual monitoring, and schedule the next validation run on your normal cadence.",
+  "critical_fail_count": 0,
+  "recommended_actions": [
+    "Maintain drift baselines under `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/schema_snapshots/baselines.json`; use AUDIT until baselines stabilize, then WARN/ENFORCE.",
+    "Maintain drift baselines under `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/schema_snapshots/baselines.json`; use AUDIT until baselines stabilize, then WARN/ENFORCE.",
+    "Maintain drift baselines under `/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/schema_snapshots/baselines.json`; use AUDIT until baselines stabilize, then WARN/ENFORCE."
+  ],
+  "recommended_actions_plain": [
+    "When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing.",
+    "When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing.",
+    "When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing."
+  ],
+  "registry_gap_count": 0,
+  "registry_gap_alert": false,
+  "registry_unavailable": false,
+  "top_3": [],
+  "schema_evolution_summary": {
+    "breaking_changes_detected": 1,
+    "compatible_changes_detected": 15,
+    "requires_migration": true
+  },
+  "schema_evolution_plain": "The latest schema comparison found changes that can break downstream consumers. Before you ship, align with the teams that read this data and follow your migration checklist.",
+  "ai_risk_summary": {
+    "embedding_drift_status": "PASS",
+    "drift_score": 0.0,
+    "output_violation_rate": 0.0,
+    "output_trend": "stable",
+    "requires_attention": false
+  },
+  "ai_risk_plain": "AI-related checks did not report urgent problems on this run. Keep running them periodically if models or prompts change.",
+  "report_sections": [
+    {
+      "key": "action",
+      "title": "1. What you should do next",
+      "content": "No blocking action is required from this report: keep your usual monitoring, and schedule the next validation run on your normal cadence."
+    },
+    {
+      "key": "health",
+      "title": "2. Data Health Score",
+      "content": "The Data Health Score is 100 out of 100. The score is 100 out of 100. Most checks passed (17 of 17). This usually means the dataset looks healthy for routine use.",
+      "score": 100.0,
+      "technical_note": "Pass ratio 100.0% over 17 checks; 0 CRITICAL failure(s) each reduce the score by 20 points (documentation formula)."
+    },
+    {
+      "key": "snapshot",
+      "title": "3. Results at a glance",
+      "content": "This run executed 17 automatic checks. 17 passed, 0 failed, and 0 produced warnings. Failed rows are the ones that need human follow-up."
+    },
+    {
+      "key": "issues",
+      "title": "4. Main issues in plain language",
+      "content": "No failing checks were in the top summary for this snapshot."
+    },
+    {
+      "key": "follow_up",
+      "title": "5. Schema, AI signals, and recommended follow-up",
+      "content": "Schema: The latest schema comparison found changes that can break downstream consumers. Before you ship, align with the teams that read this data and follow your migration checklist.\n\nAI monitoring: AI-related checks did not report urgent problems on this run. Keep running them periodically if models or prompts change.\n\nSuggested next steps:\n\n\u2022 When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing.\n\n\u2022 When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing.\n\n\u2022 When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing."
+    }
+  ],
+  "generation_sources": [
+    {
+      "kind": "validation_run",
+      "detail": "Counts, pass/fail, and per-check rows came from the validation JSON file passed to this generator.",
+      "report_id": "ef167b02-0302-4259-94a4-e9338817546a"
+    },
+    {
+      "kind": "schema_evolution",
+      "path": "validation_reports/schema_evolution.json",
+      "read": true
+    },
+    {
+      "kind": "ai_extensions",
+      "path": "validation_reports/ai_extensions.json",
+      "read": true
+    },
+    {
+      "kind": "contract_registry",
+      "path": "/home/hiwot/Pictures/Desk-Files/tenacious-academy-project/data-contract-enforcer/contract_registry/subscriptions.yaml",
+      "read": true
+    }
+  ],
+  "auto_generated": true,
+  "generated_at": "2026-04-05T00:27:31Z"
+}

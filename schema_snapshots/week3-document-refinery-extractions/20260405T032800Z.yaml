@@ -1,0 +1,69 @@
+# Injected evolution demo: processing_time_ms gains a minimum (narrowing) vs prior snapshot.
+contract_id: week3-document-refinery-extractions
+snapshot_timestamp: '2026-04-05T03:28:00Z'
+snapshot_filename_ts: 20260405T032800Z
+schema:
+  timestamp:
+    type: string
+    required: true
+  doc_id:
+    type: string
+    required: true
+    format: uuid
+    pattern: ^[0-9a-f-]{36}$
+  document_name:
+    type: string
+    required: true
+  final_strategy:
+    type: string
+    required: true
+    enum:
+    - B
+    - C
+  confidence_score:
+    type: number
+    required: true
+    minimum: 0.0
+    maximum: 1.0
+    description: Confidence score. Must remain 0.0–1.0 float. BREAKING if changed to 0–100.
+  cost_estimate_usd:
+    type: number
+    required: true
+  processing_time_ms:
+    type: integer
+    required: true
+    minimum: 3
+  budget_cap_usd:
+    type: number
+    required: true
+  budget_status:
+    type: string
+    required: true
+    enum:
+    - under_cap
+  notes:
+    type: string
+    required: false
+    enum:
+    - layout_vision_fallback
+  prompt_tokens:
+    type: number
+    required: false
+  completion_tokens:
+    type: number
+    required: false
+  entities:
+    type: array
+    required: false
+  token_count:
+    type: object
+    required: false
+    properties:
+      input:
+        type: integer
+        required: false
+      output:
+        type: integer
+        required: false
+registry_subscribers:
+- week4-cartographer

@@ -1,0 +1,58 @@
+{
+  "run_at": "2026-04-04T23:47:04Z",
+  "embedding_drift": {
+    "status": "PASS",
+    "drift_score": 0.0,
+    "threshold": 0.15,
+    "embedding_backend": "local",
+    "vector_dim": 256,
+    "samples_used": 56,
+    "baseline_latest": "schema_snapshots/embedding_baselines/latest.npz",
+    "interpretation": "stable within threshold"
+  },
+  "prompt_validation": {
+    "valid_count": 56,
+    "quarantined_count": 0,
+    "quarantine_path": null,
+    "status": "PASS"
+  },
+  "output_violation_rate": {
+    "metric_field": "event_type",
+    "total_outputs": 121,
+    "schema_violations": 0,
+    "violation_rate": 0.0,
+    "violation_rate_metric": 0.0,
+    "baseline_rate": 0.0,
+    "allowed_values_count": 33,
+    "trend": "baseline_initialized",
+    "status": "BASELINE_SET",
+    "warn_threshold": 0.05,
+    "rising_multiplier": 1.5,
+    "falling_ratio": 0.5,
+    "message": "Baseline saved. Re-run on a later batch; new event_type values or bad verdicts increase the metric."
+  },
+  "embedding_backend_requested": "auto",
+  "settings_applied": {
+    "embedding_drift_threshold": 0.15,
+    "embedding_min_samples": 10,
+    "embedding_baseline_dir": "schema_snapshots/embedding_baselines",
+    "quarantine_path": "outputs/quarantine/",
+    "violation_log_path": "violation_log/violations.jsonl",
+    "output_rate_warn_threshold": 0.05,
+    "output_rate_baseline_path": "schema_snapshots/ai_output_rate_baseline.json",
+    "output_rate_rising_multiplier": 1.5,
+    "output_rate_falling_ratio": 0.5
+  },
+  "settings_config_file": null,
+  "summary": {
+    "extensions_run": [
+      "embedding_drift",
+      "prompt_validation",
+      "output_violation_rate"
+    ],
+    "all_three_in_all_mode": true,
+    "violation_rate_metric": 0.0,
+    "output_trend": "baseline_initialized",
+    "violation_log_events_appended": 0
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "contract_id": "week3-document-refinery-extractions",
+  "generated_at": "2026-04-05T00:27:12Z",
+  "compatibility_verdict": "BREAKING_CHANGE_DETECTED",
+  "snapshot_pair": {
+    "old": "20260404T192053Z.yaml",
+    "new": "20260405T032800Z.yaml"
+  },
+  "breaking_changes": [
+    {
+      "field": "processing_time_ms",
+      "taxonomy": "range_minimum_change",
+      "verdict": "BREAKING",
+      "reason": "Range minimum changed None → 3.0",
+      "tool_equivalents": {
+        "confluent": "FORWARD incompatible — BLOCKED",
+        "dbt": "Passes type check but breaks value semantics",
+        "pact": "Consumer pact fails if type was declared"
+      },
+      "operator_tooling": {
+        "meaning": "Lower numeric bound changed; symmetric risk to range_maximum_change.",
+        "kafka_avro_json": "Same as tightening `minimum` in schema-aware pipelines—old producers may still send smaller values.",
+        "dbt": "Adjust minimum checks and fix rows below the new floor before promoting.",
+        "schema_registry": "See range_maximum_change (constraint narrowing)."
+      }
+    }
+  ],
+  "taxonomy_tooling_reference": {
+    "add_required_field": {
+      "meaning": "Every record must now carry this field; absent values break consumers written against the old contract.",
+      "kafka_avro_json": "Adding a required property without a default is backward-incompatible for old consumers; use optional-then-required rollout or a new subject/version.",
+      "dbt": "Add nullable column → backfill → then enforce `not_null` / contract test; fail CI if seeds omit the column.",
+      "schema_registry": "Same compatibility class as Confluent BACKWARD blocked: existing readers cannot assume the field exists."
+    },
+    "add_nullable_field": {
+      "meaning": "New optional field; old producers/consumers may omit it.",
+      "kafka_avro_json": "Purely additive field (optional) is usually backward compatible; bump schema version per your registry policy.",
+      "dbt": "`ALTER TABLE ... ADD COLUMN` nullable; update `sources.yml` / contract YAML; rarely blocks `dbt compile`.",
+      "schema_registry": "Typically allowed under BACKWARD; still notify Flink/SQL consumers that a new attribute may appear."
+    },
+    "remove_field": {
+      "meaning": "Column/attribute removed from the contract; anything still selecting it fails.",
+      "kafka_avro_json": "Removing a field breaks readers that decode it; use deprecation window, dual schema, or new topic major version.",
+      "dbt": "Downstream `ref()` models fail if they still `select` the column; drop in staging only after lineage is clean.",
+      "schema_registry": "BLOCKED under BACKWARD/FULL until no consumer depends on the field."
+    },
+    "type_change": {
+      "meaning": "Wire representation changed (e.g. string → number); reinterpretation and Serde errors are likely.",
+      "kafka_avro_json": "Incompatible type swap for the same subject is rejected; may require new topic or compatibility override (discouraged).",
+      "dbt": "Explicit `cast` in staging may fail on legacy strings; add cleansing migration + data-quality test before tightening contract.",
+      "schema_registry": "Equivalent to incompatible evolution—do not auto-register without human review."
+    },
+    "range_maximum_change": {
+      "meaning": "Upper numeric bound tightened; values that were valid may now violate the contract.",
+      "kafka_avro_json": "If bounds are encoded in schema (Avro/JSON Schema `maximum`), tightening can fail registration or reject in-flight records.",
+      "dbt": "Tighten `accepted_range` / custom test; quarantine or clamp rows above the new max.",
+      "schema_registry": "Treat like narrowing: backward readers may still emit now-illegal values."
+    },
+    "range_minimum_change": {
+      "meaning": "Lower numeric bound changed; symmetric risk to range_maximum_change.",
+      "kafka_avro_json": "Same as tightening `minimum` in schema-aware pipelines—old producers may still send smaller values.",
+      "dbt": "Adjust minimum checks and fix rows below the new floor before promoting.",
+      "schema_registry": "See range_maximum_change (constraint narrowing)."
+    },
+    "enum_value_removed": {
+      "meaning": "A previously legal enum literal disappeared; pipelines still emitting it will fail validation.",
+      "kafka_avro_json": "Removing enum symbols is backward incompatible; drain producers or dual-write before registration.",
+      "dbt": "Update `accepted_values` and dimension tables; legacy fact rows may fail until backfilled/mapped.",
+      "schema_registry": "BLOCKED for backward compatibility until consumers stop using the removed symbol."
+    },
+    "enum_value_added": {
+      "meaning": "New allowed categorical value; old code paths usually still work.",
+      "kafka_avro_json": "Adding enum values is often backward compatible; Flink SQL or dbt seeds that enumerate all literals need updating.",
+      "dbt": "Extend `accepted_values` / seed lists; add test row for the new category.",
+      "schema_registry": "Generally permitted; still broadcast to analytics owners."
+    },
+    "no_material_change": {
+      "meaning": "No clause the analyzer treats as material (ordering/comments drift, etc.).",
+      "kafka_avro_json": "No Kafka subject action implied by this row alone.",
+      "dbt": "No migration triggered from this classification.",
+      "schema_registry": "No registration delta required from this row."
+    },
+    "classification_error": {
+      "meaning": "Classifier raised; treat as breaking until an engineer confirms.",
+      "kafka_avro_json": "Block automated schema promotion to prod topics.",
+      "dbt": "Hold merge; reproduce diff with explicit `--snapshot-old` / `--snapshot-new`.",
+      "schema_registry": "Manual review only—do not rely on compatibility verdict from this row."
+    }
+  },
+  "taxonomy_counts": {
+    "no_material_change": 15,
+    "range_minimum_change": 1
+  },
+  "migration_checklist": [
+    "[REQUIRED] Notify subscribers (processing_time_ms, taxonomy=range_minimum_change): week4-cartographer",
+    "[REQUIRED] Write migration script in outputs/migrate/ before deploying",
+    "[REQUIRED] Re-run ValidationRunner after migration to confirm clean"
+  ],
+  "rollback_plan": "Rollback to snapshot '20260404T192053Z.yaml' under contract 'week3-document-refinery-extractions'; restore prior artifacts before retrying promotion.",
+  "rollback_plan_detail": {
+    "anchor_snapshot": "20260404T192053Z.yaml",
+    "steps": [
+      "Check out contract schema from snapshot file schema_snapshots/week3-document-refinery-extractions/20260404T192053Z.yaml.",
+      "Revert generated_contracts YAML and dbt models to the commit that produced that snapshot (or regenerate from frozen inputs).",
+      "Notify all registry subscribers for this contract_id; pause ENFORCE gates until rollback is verified.",
+      "Run: python contracts/runner.py --contract generated_contracts/<matching>.yaml --data <stable jsonl> --mode AUDIT.",
+      "Open a new migration PR before re-attempting the breaking schema promotion."
+    ]
+  },
+  "registry_subscribers_hint": "week4-cartographer",
+  "cli_reproduce_diff": "python contracts/schema_analyzer.py --contract-id week3-document-refinery-extractions --snapshot-old 20260404T192053Z.yaml --snapshot-new 20260405T032800Z.yaml -o validation_reports/schema_evolution_diff.json"
+}

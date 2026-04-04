@@ -1,16 +1,16 @@
 {
-  "contract_id": "week3-document-refinery-extractions",
-  "analyzed_at": "2026-04-05T00:27:12Z",
+  "contract_id": "week5-event-sourcing-events",
+  "analyzed_at": "2026-04-05T00:14:14Z",
   "pair_selection_mode": "explicit_cli_pair",
-  "snapshot_old": "20260404T192053Z.yaml",
-  "snapshot_new": "20260405T032800Z.yaml",
+  "snapshot_old": "20260404T192056Z.yaml",
+  "snapshot_new": "20260404T192128Z.yaml",
   "snapshot_paths_relative": {
-    "old": "schema_snapshots/week3-document-refinery-extractions/20260404T192053Z.yaml",
-    "new": "schema_snapshots/week3-document-refinery-extractions/20260405T032800Z.yaml"
+    "old": "schema_snapshots/week5-event-sourcing-events/20260404T192056Z.yaml",
+    "new": "schema_snapshots/week5-event-sourcing-events/20260404T192128Z.yaml"
   },
-  "compatibility_verdict": "BREAKING_CHANGE_DETECTED",
+  "compatibility_verdict": "NO_BREAKING_CHANGES",
   "schema_registry_style": {
-    "backward_readers": "BACKWARD_INCOMPATIBLE",
+    "backward_readers": "BACKWARD_COMPATIBLE",
     "note": "Informal Confluent-style label; each change includes tool_equivalents (dbt/Pact) and operator_tooling (Kafka/Avro/JSON Schema + dbt + registry narrative)."
   },
   "taxonomy_tooling_reference": {
@@ -76,15 +76,14 @@
     }
   },
   "taxonomy_counts": {
-    "no_material_change": 15,
-    "range_minimum_change": 1
+    "no_material_change": 14
   },
-  "total_changes": 16,
-  "breaking_count": 1,
-  "compatible_count": 15,
+  "total_changes": 14,
+  "breaking_count": 0,
+  "compatible_count": 14,
   "changes": [
     {
-      "field": "budget_cap_usd",
+      "field": "aggregate_id",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -101,7 +100,7 @@
       }
     },
     {
-      "field": "budget_status",
+      "field": "aggregate_type",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -118,7 +117,7 @@
       }
     },
     {
-      "field": "completion_tokens",
+      "field": "event_id",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -135,7 +134,7 @@
       }
     },
     {
-      "field": "confidence_score",
+      "field": "event_type",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -152,7 +151,7 @@
       }
     },
     {
-      "field": "cost_estimate_usd",
+      "field": "metadata",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -169,7 +168,7 @@
       }
     },
     {
-      "field": "doc_id",
+      "field": "metadata.causation_id",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -186,7 +185,7 @@
       }
     },
     {
-      "field": "document_name",
+      "field": "metadata.correlation_id",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -203,7 +202,7 @@
       }
     },
     {
-      "field": "entities",
+      "field": "metadata.source_service",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -220,7 +219,7 @@
       }
     },
     {
-      "field": "final_strategy",
+      "field": "metadata.user_id",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -237,7 +236,7 @@
       }
     },
     {
-      "field": "notes",
+      "field": "occurred_at",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -254,24 +253,7 @@
       }
     },
     {
-      "field": "processing_time_ms",
-      "taxonomy": "range_minimum_change",
-      "verdict": "BREAKING",
-      "reason": "Range minimum changed None → 3.0",
-      "tool_equivalents": {
-        "confluent": "FORWARD incompatible — BLOCKED",
-        "dbt": "Passes type check but breaks value semantics",
-        "pact": "Consumer pact fails if type was declared"
-      },
-      "operator_tooling": {
-        "meaning": "Lower numeric bound changed; symmetric risk to range_maximum_change.",
-        "kafka_avro_json": "Same as tightening `minimum` in schema-aware pipelines—old producers may still send smaller values.",
-        "dbt": "Adjust minimum checks and fix rows below the new floor before promoting.",
-        "schema_registry": "See range_maximum_change (constraint narrowing)."
-      }
-    },
-    {
-      "field": "prompt_tokens",
+      "field": "payload",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -288,7 +270,7 @@
       }
     },
     {
-      "field": "timestamp",
+      "field": "recorded_at",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -305,7 +287,7 @@
       }
     },
     {
-      "field": "token_count",
+      "field": "schema_version",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -322,24 +304,7 @@
       }
     },
     {
-      "field": "token_count.input",
-      "taxonomy": "no_material_change",
-      "verdict": "COMPATIBLE",
-      "reason": "No material change",
-      "tool_equivalents": {
-        "confluent": "No registration impact for this field",
-        "dbt": "No schema test delta required for this field",
-        "pact": "No consumer update required for this declaration"
-      },
-      "operator_tooling": {
-        "meaning": "No clause the analyzer treats as material (ordering/comments drift, etc.).",
-        "kafka_avro_json": "No Kafka subject action implied by this row alone.",
-        "dbt": "No migration triggered from this classification.",
-        "schema_registry": "No registration delta required from this row."
-      }
-    },
-    {
-      "field": "token_count.output",
+      "field": "sequence_number",
       "taxonomy": "no_material_change",
       "verdict": "COMPATIBLE",
       "reason": "No material change",
@@ -357,24 +322,19 @@
     }
   ],
   "migration_checklist": [
-    "[REQUIRED] Notify subscribers (processing_time_ms, taxonomy=range_minimum_change): week4-cartographer",
-    "[REQUIRED] Write migration script in outputs/migrate/ before deploying",
-    "[REQUIRED] Re-run ValidationRunner after migration to confirm clean"
+    "[OK] No field-level BREAKING verdicts in this pair — backward readers likely safe for this diff.",
+    "[RECOMMENDED] Still verify downstream dbt / consumers if you added enums or widened types."
   ],
-  "rollback_plan": "Rollback to snapshot '20260404T192053Z.yaml' under contract 'week3-document-refinery-extractions'; restore prior artifacts before retrying promotion.",
+  "rollback_plan": "No rollback required.",
   "rollback_plan_detail": {
-    "anchor_snapshot": "20260404T192053Z.yaml",
+    "anchor_snapshot": null,
     "steps": [
-      "Check out contract schema from snapshot file schema_snapshots/week3-document-refinery-extractions/20260404T192053Z.yaml.",
-      "Revert generated_contracts YAML and dbt models to the commit that produced that snapshot (or regenerate from frozen inputs).",
-      "Notify all registry subscribers for this contract_id; pause ENFORCE gates until rollback is verified.",
-      "Run: python contracts/runner.py --contract generated_contracts/<matching>.yaml --data <stable jsonl> --mode AUDIT.",
-      "Open a new migration PR before re-attempting the breaking schema promotion."
+      "No rollback required — compatibility verdict indicates no BREAKING-classified field transitions."
     ]
   },
-  "cli_reproduce_diff": "python contracts/schema_analyzer.py --contract-id week3-document-refinery-extractions --snapshot-old 20260404T192053Z.yaml --snapshot-new 20260405T032800Z.yaml -o validation_reports/schema_evolution_diff.json",
-  "migration_impact_file": "validation_reports/migration_impact_week3-document-refinery-extractions_20260405T002712Z.json",
+  "cli_reproduce_diff": "python contracts/schema_analyzer.py --contract-id week5-event-sourcing-events --snapshot-old 20260404T192056Z.yaml --snapshot-new 20260404T192128Z.yaml -o validation_reports/schema_evolution_diff.json",
+  "migration_impact_file": "validation_reports/migration_impact_week5-event-sourcing-events_20260405T001414Z.json",
   "migration_impact_reports": [
-    "validation_reports/migration_impact_week3-document-refinery-extractions_20260405T002712Z.json"
+    "validation_reports/migration_impact_week5-event-sourcing-events_20260405T001414Z.json"
   ]
 }

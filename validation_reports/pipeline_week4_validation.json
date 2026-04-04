@@ -1,0 +1,59 @@
+{
+  "report_id": "484003c2-8856-4276-82f8-e0861431fb3c",
+  "pipeline_action": "PASS",
+  "mode": "AUDIT",
+  "contract_id": "week4-brownfield-lineage-snapshot",
+  "snapshot_id": "850c4132fcd2c4ca68259322f411b112ebed92b25ca1825aec0a12d0cd30eea9",
+  "run_timestamp": "2026-04-05T00:25:49Z",
+  "total_checks": 3,
+  "passed": 3,
+  "failed": 0,
+  "warned": 0,
+  "errored": 0,
+  "results": [
+    {
+      "check_id": "week4.snapshot_id.required",
+      "column_name": "snapshot_id",
+      "check_type": "not_null",
+      "status": "PASS",
+      "actual_value": "present",
+      "expected": "uuid",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week4.git_commit.format",
+      "column_name": "git_commit",
+      "check_type": "pattern",
+      "status": "PASS",
+      "actual_value": "40 hex",
+      "expected": "40 hex",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "week4.edges.endpoints",
+      "column_name": "edges[*].source,target",
+      "check_type": "referential",
+      "status": "PASS",
+      "actual_value": "all resolve",
+      "expected": "nodes",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    }
+  ],
+  "runner_mode_requested": "AUDIT",
+  "runner_mode_effective": "AUDIT",
+  "circuit_breaker_tripped": false,
+  "rubric_signals": {
+    "injected_or_synthetic_violation_surfaced": false,
+    "confidence_range_clause_failed": false,
+    "confidence_mean_drift_alert": false
+  }
+}

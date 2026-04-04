@@ -1,0 +1,47 @@
+{
+  "report_id": "115e0039-2b1f-4fc5-aa8d-e85126388143",
+  "pipeline_action": "PASS",
+  "mode": "AUDIT",
+  "contract_id": "langsmith-trace-record-migrated",
+  "snapshot_id": "7aee8453c17a0a8f625337d3ebede2bb0135f8cce02c3a3f041e008944e8a175",
+  "run_timestamp": "2026-04-05T00:25:51Z",
+  "total_checks": 2,
+  "passed": 2,
+  "failed": 0,
+  "warned": 0,
+  "errored": 0,
+  "results": [
+    {
+      "check_id": "langsmith.run_type.enum",
+      "column_name": "run_type",
+      "check_type": "accepted_values",
+      "status": "PASS",
+      "actual_value": "valid",
+      "expected": "['chain', 'embedding', 'llm', 'retriever', 'tool']",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    },
+    {
+      "check_id": "langsmith.inputs_key_count.drift.mean",
+      "column_name": "inputs_key_count",
+      "check_type": "drift",
+      "status": "PASS",
+      "actual_value": "current_mean=18, baseline_mean=18, z=0.000_std",
+      "expected": "within 3 std of baseline mean (FAIL beyond); WARN beyond 2 std",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": ""
+    }
+  ],
+  "runner_mode_requested": "AUDIT",
+  "runner_mode_effective": "AUDIT",
+  "circuit_breaker_tripped": false,
+  "rubric_signals": {
+    "injected_or_synthetic_violation_surfaced": false,
+    "confidence_range_clause_failed": false,
+    "confidence_mean_drift_alert": false
+  }
+}

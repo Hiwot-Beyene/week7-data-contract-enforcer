@@ -1,0 +1,64 @@
+{
+  "baseline_rate": 0.0,
+  "metric_field": "event_type",
+  "allowed_event_types": [
+    "AgentInputValidated",
+    "AgentOutputWritten",
+    "AgentSessionCompleted",
+    "AgentSessionStarted",
+    "ApplicationApproved",
+    "ApplicationDeclined",
+    "ApplicationSubmitted",
+    "ComplianceCheckCompleted",
+    "ComplianceCheckInitiated",
+    "ComplianceCheckRequested",
+    "ComplianceRuleNoted",
+    "ComplianceRulePassed",
+    "CreditAnalysisCompleted",
+    "CreditAnalysisRequested",
+    "CreditRecordOpened",
+    "DecisionGenerated",
+    "DecisionRequested",
+    "DocumentAdded",
+    "DocumentFormatValidated",
+    "DocumentUploadRequested",
+    "DocumentUploaded",
+    "ExtractedFactsConsumed",
+    "ExtractionCompleted",
+    "ExtractionStarted",
+    "FraudScreeningCompleted",
+    "FraudScreeningInitiated",
+    "FraudScreeningRequested",
+    "HistoricalProfileConsumed",
+    "HumanReviewCompleted",
+    "HumanReviewRequested",
+    "PackageCreated",
+    "PackageReadyForAnalysis",
+    "QualityAssessmentCompleted"
+  ],
+  "last_rate": 0.0,
+  "rate_history": [
+    {
+      "run_at": "2026-04-04T23:47:04Z",
+      "metric_field": "event_type",
+      "violation_rate": 0.0,
+      "violations": 0,
+      "total": 121
+    },
+    {
+      "run_at": "2026-04-05T00:01:54Z",
+      "metric_field": "event_type",
+      "violation_rate": 0.0,
+      "violations": 0,
+      "total": 121
+    },
+    {
+      "run_at": "2026-04-05T00:26:01Z",
+      "metric_field": "event_type",
+      "violation_rate": 0.0,
+      "violations": 0,
+      "total": 121
+    }
+  ],
+  "updated_at": "2026-04-05T00:26:01Z"
+}
