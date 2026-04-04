@@ -2,15 +2,21 @@
 """
 Stakeholder report: validation summary, top violations with plain-language blurbs,
 registry context, five plain-language ``report_sections``, Data Health Score,
-and programmatic ``generation_sources`` (report_version 2.2).
+and programmatic ``generation_sources``.
+
+**Report version** is not hardcoded: resolve order is CLI ``--report-version``,
+environment ``ENFORCER_REPORT_VERSION``, then single-line file
+``enforcer_report/REPORT_VERSION``, then package default ``DEFAULT_REPORT_VERSION``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -18,7 +24,63 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-REPORT_VERSION = "2.2"
+# Used only when no file, no env, and no CLI override (see ``resolve_report_version``).
+DEFAULT_REPORT_VERSION = "2.3.0"
+_REPORT_VERSION_FILE = REPO_ROOT / "enforcer_report" / "REPORT_VERSION"
+
+
+def resolve_report_version(cli_override: Optional[str] = None) -> str:
+    """
+    Single source of truth for ``report_version`` in JSON and PDF.
+
+    Precedence: ``cli_override`` → ``ENFORCER_REPORT_VERSION`` →
+    ``enforcer_report/REPORT_VERSION`` (first non-comment line) →
+    ``DEFAULT_REPORT_VERSION``.
+    """
+    if cli_override is not None and str(cli_override).strip():
+        return str(cli_override).strip()
+    env_v = (os.environ.get("ENFORCER_REPORT_VERSION") or "").strip()
+    if env_v:
+        return env_v
+    if _REPORT_VERSION_FILE.is_file():
+        try:
+            for line in _REPORT_VERSION_FILE.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                return s
+        except OSError:
+            pass
+    return DEFAULT_REPORT_VERSION
+
+
+def stakeholder_report_stem(validation_report: dict) -> str:
+    """
+    Filesystem-safe filename stem so operators see **which pipeline (contract)** and **which run**
+    without opening the file.
+
+    Pattern: ``stakeholder__<contract_id>__<run_utc_slug>`` — e.g.
+    ``stakeholder__week3-document-refinery-extractions__20260404T234651Z``.
+
+    Uses ``contract_id`` and ``run_timestamp`` from ValidationRunner JSON; falls back to
+    ``unknown_contract`` and "now" UTC if missing.
+    """
+    cid = str(validation_report.get("contract_id") or "").strip() or "unknown_contract"
+    cid_fs = re.sub(r"[^a-zA-Z0-9_.-]+", "_", cid)
+    cid_fs = re.sub(r"_+", "_", cid_fs).strip("_")[:120] or "unknown_contract"
+    ts_raw = str(validation_report.get("run_timestamp") or "").strip()
+    if ts_raw:
+        try:
+            dt = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            t_slug = dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        except ValueError:
+            t_slug = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    else:
+        t_slug = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"stakeholder__{cid_fs}__{t_slug}"
+
 
 _ARRAY_BRACKET_RE = re.compile(r"\[\*\]")
 
@@ -118,6 +180,81 @@ def _schema_clause_for_failure(contract_id: str, check_id: str, column_name: str
 def _repo_path(path: Union[str, Path]) -> Path:
     p = Path(path)
     return p if p.is_absolute() else REPO_ROOT / p
+
+
+def pipeline_slug_from_contract_id(contract_id: str) -> str:
+    """
+    Filesystem-safe token from Bitol ``contract_id`` so report names show which pipeline
+    produced them (e.g. ``week3_document_refinery_extractions``).
+    """
+    s = (contract_id or "").strip().lower()
+    if not s:
+        return "unknown_pipeline"
+    out = re.sub(r"[^a-z0-9]+", "_", s)
+    out = re.sub(r"_+", "_", out).strip("_")
+    return out or "unknown_pipeline"
+
+
+def pipeline_slug_from_validation_report(validation_report: dict) -> str:
+    return pipeline_slug_from_contract_id(str(validation_report.get("contract_id") or ""))
+
+
+def resolve_stakeholder_output_path(
+    path: Path,
+    slug: str,
+    *,
+    default_filename: str,
+    skip_pipeline_prefix: bool,
+) -> Path:
+    """
+    If ``skip_pipeline_prefix`` is False, ensure ``slug`` appears in the output filename.
+
+    - Directory or path string ending with ``/`` → ``<dir>/<slug>_<default_filename>``.
+    - File path whose stem already starts with ``slug`` → unchanged.
+    - Otherwise → ``<parent>/<slug>_<stem>.<suffix>``.
+    """
+    if skip_pipeline_prefix:
+        return path
+    raw = str(path)
+    is_dir_intent = raw.endswith(("/", "\\")) or (path.exists() and path.is_dir())
+    if is_dir_intent:
+        base = path if (path.exists() and path.is_dir()) else _repo_path(raw.rstrip("/\\"))
+        base.mkdir(parents=True, exist_ok=True)
+        return base / f"{slug}_{default_filename}"
+
+    if path.suffix.lower() != ".json" and default_filename.endswith(".json"):
+        # tolerate passing a basename without extension
+        path = path.with_suffix(".json")
+
+    stem = path.stem
+    if stem == slug or stem.startswith(f"{slug}_"):
+        return path
+    return path.with_name(f"{slug}_{path.name}")
+
+
+def resolve_stakeholder_pdf_path(
+    path: Path,
+    slug: str,
+    *,
+    default_filename: str,
+    skip_pipeline_prefix: bool,
+) -> Path:
+    if skip_pipeline_prefix:
+        return path
+    raw = str(path)
+    is_dir_intent = raw.endswith(("/", "\\")) or (path.exists() and path.is_dir())
+    if is_dir_intent:
+        base = path if (path.exists() and path.is_dir()) else _repo_path(raw.rstrip("/\\"))
+        base.mkdir(parents=True, exist_ok=True)
+        return base / f"{slug}_{default_filename}"
+
+    if path.suffix.lower() != ".pdf":
+        path = path.with_suffix(".pdf")
+
+    stem = path.stem
+    if stem == slug or stem.startswith(f"{slug}_"):
+        return path
+    return path.with_name(f"{slug}_{path.name}")
 
 
 def _resolve_registry_file(registry_path: str | None) -> str | None:
@@ -612,6 +749,7 @@ def generate_report(
     registry_path: Optional[str] = None,
     ai_extensions_path: Optional[Union[str, Path]] = None,
     schema_evolution_path: Optional[Union[str, Path]] = None,
+    report_version: Optional[str] = None,
 ) -> dict:
     """
     Build JSON report with ``top_3`` violations (plain_language), ``registry_gap_count``,
@@ -619,7 +757,12 @@ def generate_report(
 
     Paths default to the usual repo layout under ``REPO_ROOT``. Pass absolute paths
     or paths relative to ``REPO_ROOT``.
+
+    ``report_version`` overrides the resolved version (normally from
+    ``enforcer_report/REPORT_VERSION`` or ``ENFORCER_REPORT_VERSION``).
     """
+    resolved_version = resolve_report_version(report_version)
+    artifact_stem = stakeholder_report_stem(validation_report)
     reports_dir_p = _repo_path(reports_dir)
 
     if ai_extensions_path is None:
@@ -752,7 +895,9 @@ def generate_report(
     ]
 
     out: Dict[str, Any] = {
-        "report_version": REPORT_VERSION,
+        "report_version": resolved_version,
+        "report_artifact_stem": artifact_stem,
+        "pipeline_contract_id": validation_report.get("contract_id"),
         "report_id": validation_report.get("report_id"),
         "contract_id": validation_report.get("contract_id"),
         "snapshot_id": validation_report.get("snapshot_id"),
@@ -782,97 +927,327 @@ def generate_report(
         "report_sections": report_sections,
         "generation_sources": generation_sources,
         "auto_generated": True,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     return out
 
 
 def write_enforcer_pdf(report: dict, out_path: Path) -> None:
     """
-    Write a stakeholder PDF alongside ``report_data.json`` (ReportLab).
+    Write a styled stakeholder PDF (ReportLab): cover band, KPI strip, section cards,
+    optional top-issues table, and footer with version line.
+
     Uses ``report_sections`` when present (five plain-language blocks).
-    Safe no-op if reportlab is not installed (caller may catch ImportError).
     """
     from xml.sax.saxutils import escape
 
+    from reportlab.lib import colors
+    from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from reportlab.platypus import (
+        HRFlowable,
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
+    # Palette — teal / slate editorial look
+    C_PRIMARY_DARK = HexColor("#115e59")
+    C_SLATE = HexColor("#334155")
+    C_MUTED = HexColor("#64748b")
+    C_PANEL = HexColor("#f0fdfa")
+    C_BORDER = HexColor("#ccfbf1")
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    page_w, page_h = letter
+
+    stem_meta = str(report.get("report_artifact_stem") or "").strip()
+    doc_title = (
+        f"Enforcer — {stem_meta}"
+        if stem_meta
+        else "Data Contract Enforcer Report"
+    )
     doc = SimpleDocTemplate(
         str(out_path),
         pagesize=letter,
-        rightMargin=54,
-        leftMargin=54,
-        topMargin=54,
-        bottomMargin=54,
+        leftMargin=56,
+        rightMargin=56,
+        topMargin=120,
+        bottomMargin=64,
+        title=doc_title,
+        author="Data Contract Enforcer",
     )
-    styles = getSampleStyleSheet()
-    story: List[Any] = []
+    frame_w = page_w - 56 - 56
 
-    def para(text: str, style_name: str = "Normal") -> Paragraph:
-        t = escape(str(text or "").replace("\r", ""))
-        t = t.replace("\n", "<br/>")
+    styles = getSampleStyleSheet()
+    styles.add(
+        ParagraphStyle(
+            name="RptBody",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=10,
+            leading=14,
+            textColor=C_SLATE,
+            spaceAfter=8,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="RptMeta",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9,
+            leading=12,
+            textColor=C_MUTED,
+            spaceAfter=4,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="RptSecTitle",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=16,
+            textColor=C_PRIMARY_DARK,
+            spaceBefore=18,
+            spaceAfter=10,
+            borderPadding=(0, 0, 0, 4),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="RptSmallBold",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            textColor=C_MUTED,
+        )
+    )
+    story: List[Any] = []
+    rv = escape(str(report.get("report_version") or resolve_report_version()))
+
+    def para_html(html: str, style_name: str = "RptBody") -> Paragraph:
+        return Paragraph(html, styles[style_name])
+
+    def para_plain(text: str, style_name: str = "RptBody") -> Paragraph:
+        t = escape(str(text or "").replace("\r", "")).replace("\n", "<br/>")
         return Paragraph(t, styles[style_name])
 
-    story.append(para("Data Contract Enforcer Report", "Title"))
+    # --- KPI dashboard (below header band drawn on canvas) ---
+    hs = report.get("data_health_score", report.get("health_score"))
+    hs_disp = f"{float(hs):.1f}" if isinstance(hs, (int, float)) else escape(str(hs or "—"))
+    try:
+        tc = int(report.get("total_checks") or 0)
+        ps = int(report.get("passed") or 0)
+        fl = int(report.get("failed") or 0)
+        wn = int(report.get("warned") or 0)
+    except (TypeError, ValueError):
+        tc, ps, fl, wn = 0, 0, 0, 0
+
+    kpi_data = [
+        [
+            Paragraph(
+                f"<font size='9' color='#64748b'>Data Health Score</font><br/>"
+                f"<font size='26' color='#0f766e'><b>{hs_disp}</b></font>"
+                f"<font size='10' color='#64748b'> / 100</font>",
+                styles["Normal"],
+            ),
+            para_plain(
+                f"Checks passed\n{ps} / {tc}\n\n"
+                f"Failed: {fl}  •  Warned: {wn}\n"
+                f"Critical fail groups: {report.get('critical_fail_count', '—')}",
+                "RptMeta",
+            ),
+            para_plain(
+                f"Contract\n{report.get('contract_id') or '—'}\n\n"
+                f"Validation run\n{report.get('run_timestamp') or '—'}",
+                "RptMeta",
+            ),
+        ]
+    ]
+    kpi = Table(kpi_data, colWidths=[frame_w * 0.38, frame_w * 0.30, frame_w * 0.32])
+    kpi.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), C_PANEL),
+                ("BOX", (0, 0), (-1, -1), 1, C_BORDER),
+                ("TOPPADDING", (0, 0), (-1, -1), 16),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(kpi)
+    story.append(Spacer(1, 0.14 * inch))
+
+    # Auto-generated callout
+    story.append(
+        para_html(
+            f"<b><font color='#0f766e'>Auto-generated report.</font></b> "
+            f"This PDF was built from machine validation JSON and optional "
+            f"schema-evolution / AI-extension inputs — not hand-authored prose. "
+            f"<i>Report version {rv}.</i>"
+        )
+    )
+    story.append(Spacer(1, 0.06 * inch))
+    if report.get("generated_at"):
+        story.append(para_plain(f"Generated: {report.get('generated_at')}", "RptMeta"))
+    if report.get("snapshot_id"):
+        story.append(para_plain(f"Snapshot hash: {report.get('snapshot_id')}", "RptMeta"))
     story.append(Spacer(1, 0.12 * inch))
 
-    meta_lines = [
-        f"Report version: {report.get('report_version', REPORT_VERSION)}",
-        f"Contract: {report.get('contract_id') or '—'}",
-        f"Run time: {report.get('run_timestamp') or '—'}",
-        f"Snapshot: {report.get('snapshot_id') or '—'}",
-    ]
-    if report.get("generated_at"):
-        meta_lines.append(f"Generated: {report.get('generated_at')}")
-    if report.get("project_id"):
-        meta_lines.append(f"Project: {report.get('project_id')}")
-    if report.get("auto_generated"):
-        meta_lines.append("Built automatically from validation and supporting files (not hand-written).")
-    story.append(para("\n".join(meta_lines)))
-    story.append(Spacer(1, 0.15 * inch))
+    # Top issues table
+    top3 = report.get("top_3")
+    if isinstance(top3, list) and top3:
+        story.append(para_plain("Priority issues (top failures)", "RptSecTitle"))
+        th = [
+            para_plain("Check", "RptSmallBold"),
+            para_plain("Status", "RptSmallBold"),
+            para_plain("Detail", "RptSmallBold"),
+        ]
+        rows = [th]
+        for item in top3[:5]:
+            if not isinstance(item, dict):
+                continue
+            st = str(item.get("status") or "")
+            st_hex = (
+                "#b91c1c"
+                if st == "FAIL"
+                else "#b45309"
+                if st in ("WARN", "WARNING")
+                else "#334155"
+            )
+            ck = escape(str(item.get("check_id") or ""))[:56]
+            av = escape(str(item.get("actual_value") or item.get("message") or ""))[:220]
+            rows.append(
+                [
+                    para_html(f"<font size='8'>{ck}</font>"),
+                    para_html(f"<font size='9' color='{st_hex}'><b>{escape(st)}</b></font>"),
+                    para_html(f"<font size='8'>{av}</font>"),
+                ]
+            )
+        tw = [frame_w * 0.30, frame_w * 0.12, frame_w * 0.58]
+        issues = Table(rows, colWidths=tw, repeatRows=1)
+        issues.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), C_PRIMARY_DARK),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, HexColor("#f8fafc")]),
+                    ("GRID", (0, 0), (-1, -1), 0.25, C_BORDER),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        story.append(issues)
+        story.append(Spacer(1, 0.16 * inch))
 
+    story.append(HRFlowable(width=frame_w, thickness=0.5, color=C_BORDER, spaceBefore=4, spaceAfter=16))
+
+    # Five narrative sections
     sections = report.get("report_sections")
     if isinstance(sections, list) and sections:
         for block in sections:
             if not isinstance(block, dict):
                 continue
-            title = str(block.get("title") or "Section")
+            title = escape(str(block.get("title") or "Section"))
             body = str(block.get("content") or "")
-            story.append(para(title, "Heading2"))
-            story.append(para(body))
+            story.append(para_html(f"<b>{title}</b>", "RptSecTitle"))
+            story.append(para_plain(body))
             tech = block.get("technical_note")
             if tech and str(block.get("key") or "") == "health":
-                story.append(para(f"Technical detail: {tech}"))
-            story.append(Spacer(1, 0.1 * inch))
+                story.append(
+                    para_html(
+                        f"<font size='9' color='#64748b'><i>Technical: {escape(str(tech))}</i></font>"
+                    )
+                )
+            story.append(Spacer(1, 0.06 * inch))
     else:
-        hs = report.get("data_health_score", report.get("health_score", "—"))
-        story.append(para(f"Data Health Score: {hs}", "Heading2"))
-        story.append(para(str(report.get("health_narrative") or "")))
-        story.append(Spacer(1, 0.1 * inch))
+        story.append(para_plain(f"Data Health Score: {hs_disp}", "RptSecTitle"))
+        story.append(para_plain(str(report.get("health_narrative") or "")))
+
+    story.append(PageBreak())
+
+    # Appendix: lineage of data
+    story.append(para_plain("How this report was produced", "RptSecTitle"))
+    story.append(
+        para_plain(
+            "Inputs typically include: ValidationRunner JSON, optional "
+            "schema_evolution.json from SchemaEvolutionAnalyzer, optional "
+            "ai_extensions.json from Phase 4 checks, and the contract registry YAML "
+            "for subscriber context."
+        )
+    )
+    story.append(Spacer(1, 0.1 * inch))
 
     gs = report.get("generation_sources")
     if isinstance(gs, list) and gs:
-        story.append(para("Where this report came from", "Heading2"))
-        for g in gs[:8]:
+        for g in gs[:12]:
             if not isinstance(g, dict):
                 continue
             kind = escape(str(g.get("kind") or ""))
             detail = escape(str(g.get("detail") or g.get("path") or ""))
             read = g.get("read")
-            line = f"• {kind}: {detail}" if detail else f"• {kind}"
+            line = f"• <b>{kind}</b>: {detail}" if detail else f"• <b>{kind}</b>"
             if read is not None:
-                line += f" (read={'yes' if read else 'no'})"
-            story.append(para(line))
+                line += f" <font color='#64748b'>(read={'yes' if read else 'no'})</font>"
+            story.append(para_html(line))
         story.append(Spacer(1, 0.08 * inch))
 
-    doc.build(story)
+    def on_first_page(canvas: Any, doc_: Any) -> None:
+        canvas.saveState()
+        canvas.setFillColor(C_PRIMARY_DARK)
+        canvas.rect(0, page_h - 108, page_w, 108, fill=1, stroke=0)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 22)
+        canvas.drawString(56, page_h - 52, "Data Contract Enforcer")
+        canvas.setFont("Helvetica", 11)
+        canvas.drawString(56, page_h - 72, "Stakeholder validation report")
+        canvas.setFont("Helvetica-Oblique", 8)
+        canvas.setFillColor(HexColor("#99f6e4"))
+        canvas.drawString(56, page_h - 92, "Auto-generated • not a hand-written audit")
+        canvas.restoreState()
+        _pdf_footer(canvas, doc_)
+
+    def on_later_pages(canvas: Any, doc_: Any) -> None:
+        _pdf_footer(canvas, doc_)
+
+    def _pdf_footer(canvas: Any, doc_: Any) -> None:
+        canvas.saveState()
+        canvas.setStrokeColor(C_BORDER)
+        canvas.setLineWidth(0.75)
+        canvas.line(56, 48, page_w - 56, 48)
+        canvas.setFillColor(C_MUTED)
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(56, 34, "Data Contract Enforcer")
+        canvas.drawRightString(
+            page_w - 56,
+            34,
+            f"Report v{rv} • Page {canvas.getPageNumber()}",
+        )
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=on_first_page, onLaterPages=on_later_pages)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Enforcer stakeholder report (JSON)")
+    parser = argparse.ArgumentParser(
+        description="Enforcer stakeholder report (JSON + optional PDF)",
+        epilog=(
+            "If -o is omitted, writes <reports-dir>/stakeholder__<contract_id>__<run_timestamp>.json "
+            "from the validation report. Use bare --pdf to write a PDF with the same stem next to that JSON."
+        ),
+    )
     parser.add_argument(
         "--report",
         "-r",
@@ -884,8 +1259,11 @@ def main() -> None:
         "--output",
         "-o",
         type=str,
-        required=True,
-        help="Output path for generated report JSON",
+        default=None,
+        help=(
+            "Output JSON path. If omitted, uses "
+            "<reports-dir>/stakeholder__<contract_id>__<run_timestamp>.json (pipeline-discoverable name)."
+        ),
     )
     parser.add_argument(
         "--reports-dir",
@@ -924,9 +1302,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--pdf",
+        nargs="?",
+        const="__AUTO__",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write stakeholder PDF (reportlab). Pass a path, or use bare --pdf to use "
+            "the same directory and stem as the JSON output with .pdf (e.g. stakeholder__week3-...__....pdf)."
+        ),
+    )
+    parser.add_argument(
+        "--report-version",
         type=str,
         default=None,
-        help="Also write stakeholder PDF to this path (requires reportlab).",
+        help=(
+            "Embed this report_version string (overrides enforcer_report/REPORT_VERSION "
+            "and ENFORCER_REPORT_VERSION)."
+        ),
     )
     args = parser.parse_args()
 
@@ -935,12 +1327,20 @@ def main() -> None:
         print(f"ERROR: report not found: {report_path}", file=sys.stderr)
         sys.exit(2)
 
-    out_path = _repo_path(args.output)
-
     data = json.loads(report_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         print("ERROR: validation report must be a JSON object", file=sys.stderr)
         sys.exit(2)
+
+    stem = stakeholder_report_stem(data)
+    if args.output is None:
+        out_path = _repo_path(args.reports_dir) / f"{stem}.json"
+        print(
+            f"Using pipeline-discoverable filename stem: {stem} (contract_id + run_timestamp)",
+            file=sys.stderr,
+        )
+    else:
+        out_path = _repo_path(args.output)
 
     reg_kw: Optional[str] = None
     if args.registry is not None:
@@ -953,14 +1353,22 @@ def main() -> None:
         registry_path=reg_kw,
         ai_extensions_path=args.ai_extensions,
         schema_evolution_path=args.schema_evolution,
+        report_version=args.report_version,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(generated, indent=2), encoding="utf-8")
     print(f"Wrote {out_path}", file=sys.stderr)
 
-    if args.pdf:
+    if args.pdf == "__AUTO__":
+        pdf_path = out_path.with_suffix(".pdf")
+    elif args.pdf:
         pdf_path = _repo_path(args.pdf)
+    else:
+        pdf_path = None
+
+    if pdf_path is not None:
         try:
+            pdf_path.parent.mkdir(parents=True, exist_ok=True)
             write_enforcer_pdf(generated, pdf_path)
             print(f"Wrote {pdf_path}", file=sys.stderr)
         except ImportError:
