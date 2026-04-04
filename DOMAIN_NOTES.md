@@ -1,37 +1,41 @@
 # Domain Notes — Data Contract Enforcer
 
-I built this repository to turn informal JSONL outputs from **Week 3, Week 4, Week 5**, and **LangSmith** exports into **enforceable** promises: Bitol-style YAML contracts, automated validation reports, lineage-aware violation attribution, and schema evolution analysis. **I did not wire Week 1 (`intent_record`) or Week 2 (`verdict_record`) into this enforcer repo**—they are out of scope for my submission. The challenge document still lists them as canonical reference shapes; anything I say about compatibility below is grounded in **Week 3–5 and trace data I actually run**.
+This repository implements the **Week 7 Data Contract Enforcer** on the **TRP Weeks 1–5 platform map** (canonical schemas in the challenge brief). **Every week appears below with concrete field examples:** **Week 1 `intent_record`** and **Week 2 `verdict_record`** use the canonical shapes (`outputs/week1/intent_records.jsonl`, `outputs/week2/verdicts.jsonl` in the brief); my tree does not ship those JSONL files, but compatibility reasoning still describes *my* platform’s upstream/downstream obligations. **Weeks 3–5** tie to **generated Bitol** in `generated_contracts/` and **migrated** rows in `outputs/migrate/`. **LangSmith `trace_record`** is the trace spine enforced via `langsmith-trace-record-migrated`.
 
-My **source of truth for enforcement** is the migrated JSONL under `outputs/migrate/` (`migrated_extractions.jsonl`, `migrated_lineage_snapshots.jsonl`, `migrated_events.jsonl`, `migrated_runs.jsonl`). The generated contracts’ `servers.local.path` fields point there so the runner does not silently validate legacy shapes that no longer match the Week 7 canonical schemas.
+**Enforcement source of truth:** `outputs/migrate/migrated_extractions.jsonl`, `migrated_lineage_snapshots.jsonl`, `migrated_events.jsonl`, `migrated_runs.jsonl`. Contract `servers.local.path` fields point there so `contracts/runner.py` does not validate legacy shapes documented in `outputs/migrate/deviation_report_*.json`.
 
 ---
 
-## How my weeks connect (what I actually integrated)
-
-This is the spine of my platform map—not hypothetical Week 1–2 traffic.
+## How my weeks connect (Weeks 1–5 + traces)
 
 | Link | What happens |
 |------|----------------|
-| **Week 3 `extraction_record` → Week 4 lineage** | The Cartographer ingests extraction context so **`doc_id` (and related identity)** shows up as **graph nodes** (e.g. table/file/service identifiers), and **extracted facts** surface as **node metadata** or as the logical payload the graph annotates—not as a second silo. That is how downstream edges know *which* extraction artifact a pipeline or file node refers to. |
-| **Week 4 `lineage_snapshot` → Week 7 ViolationAttributor (required)** | The latest lineage JSONL is a **hard dependency** for attribution: I reverse edges (`READS`, `PRODUCES`, `WRITES`, `IMPORTS`, `CALLS`, `CONSUMES`), BFS **upstream** from seeds derived from the **contract’s** `lineage.downstream`, resolve `file::` / `pipeline::` paths under `codebase_root`, then run **git log** / **git blame**. Without Week 4, I cannot turn a validation FAIL into a defensible blame chain or blast-radius story. |
-| **Week 5 `event_record` → Week 7** | Event JSONL is validated under `week5-event-sourcing-events` (envelope, ids, timestamps, sequence discipline) and participates in the same **generator → runner → (optional) attributor** loop. Lineage on the contract can still reference downstream consumers even when the event stream is not the Cartographer’s primary input. |
-| **LangSmith traces → Week 7** | Migrated runs JSONL feeds `langsmith-trace-record-migrated`; same runner and baseline patterns as the other contracts. |
+| **Week 1 `intent_record`** | Canonical rows bind **`intent_id`**, **`code_refs[]`** (file, `line_start`/`line_end`, **`code_refs[].confidence` 0.0–1.0**), and **`created_at`**. Downstream consumers assume non-empty `code_refs` and unit-interval confidence for ranking or gating. |
+| **Week 2 `verdict_record`** | **`scores.*.score`** are ints **1–5**; **`overall_verdict`** ∈ **PASS | FAIL | WARN**; top-level **`confidence`** is **0.0–1.0**. Refinery or analytics that consume verdicts embed those constraints. |
+| **Week 3 → Week 4** | **`doc_id`**, **`extracted_facts`** (per-fact **`confidence` 0.0–1.0**), and entities feed the Cartographer so extractions are addressable **nodes** and **metadata** in `lineage_snapshot`. |
+| **Week 4 → Week 7** | `contracts/attributor.py` loads the snapshot, reverses **`edges[]`**, BFS upstream from **`lineage.downstream`** seeds on the Bitol contract, then **`git log --follow`** / **`git blame`**. |
+| **Week 5 → Week 7** | **`event_id`**, **`aggregate_id`**, **`sequence_number`**, **`metadata.correlation_id`**, timestamps—validated so ordering and idempotency rules stay honest. |
+| **Traces → Week 7** | **`contracts/ai_extensions.py`** (prompt JSON, embedding drift, output violation rate) extends **`langsmith-trace-record-migrated`** beyond pure structural checks. |
 
-**Net:** I implemented **3 → 4** (extraction feeding lineage semantics), **4 → 7** (lineage feeding the ViolationAttributor), and **5 → 7** (events under contract enforcement). I did **not** implement **1 → anything** or **2 → anything** in this repository.
+**Net:** **Bitol + runner + snapshots** are implemented for **Weeks 3–5 and traces**; **Weeks 1–2** stay in the **compatibility narrative** because they define intent and verdict semantics that Week 3+ builds on.
 
 ```mermaid
 flowchart LR
+  W1["Week 1<br/>intent_record"]
+  W2["Week 2<br/>verdict_record"]
   W3["Week 3<br/>extraction_record"]
   W4["Week 4<br/>lineage_snapshot"]
   W5["Week 5<br/>event_record"]
   TR["LangSmith<br/>trace_record"]
   subgraph W7["Week 7 Data Contract Enforcer"]
-    GEN2["ContractGenerator"]
-    RUN2["ValidationRunner"]
-    ATT2["ViolationAttributor<br/>requires W4 lineage"]
-    SE2["SchemaEvolutionAnalyzer"]
+    GEN2["generator.py"]
+    RUN2["runner.py"]
+    ATT2["attributor.py"]
+    SE2["schema_analyzer.py"]
   end
-  W3 -->|"doc_id → nodes;<br/>facts → metadata"| W4
+  W1 -.->|"canonical upstream"| W2
+  W2 -.->|"canonical upstream"| W3
+  W3 -->|"doc_id, facts"| W4
   W4 --> ATT2
   W3 --> GEN2
   W3 --> RUN2
@@ -61,7 +65,7 @@ Before I trusted contracts on raw `outputs/week*/` files, I compared them to the
 
 I treat a data contract as three overlapping dimensions, not a single YAML file.
 
-**Structural** commitments are what most engineers expect: field names, JSON types, required vs optional, string formats (UUID, ISO-8601), and closed enumerations. I encode these in `schema` inside each generated contract—for example `generated_contracts/week3_extractions.yaml` requires `doc_id`, constrains it with `format: uuid` and `pattern: ^[0-9a-f-]{36}$`, and nests `extracted_facts.items.confidence` as `type: number` with `minimum: 0.0` and `maximum: 1.0`.
+**Structural** commitments are what most engineers expect: field names, JSON types, required vs optional, string formats (UUID, ISO-8601), and closed enumerations. I encode these in `schema` inside each generated contract—for example `generated_contracts/week3-document-refinery-extractions.yaml` requires `doc_id`, constrains it with `format: uuid` and `pattern: ^[0-9a-f-]{36}$`, and nests `extracted_facts.items.confidence` as `type: number` with `minimum: 0.0` and `maximum: 1.0`.
 
 **Statistical** commitments catch failures that still “type-check.” The canonical Week 7 example is `extracted_facts[].confidence` staying on a **0.0–1.0** probability scale versus being rescaled to **0–100**. I enforce the range directly in `contracts/validation_checks.py` (`check_extracted_facts_confidence`, check id `week3.extracted_facts.confidence.range`). I also persist **numeric drift baselines** in `schema_snapshots/baselines.json` after the runner’s first successful establishment pass: for Week 3 I track `processing_time_ms` and `primary_fact_confidence` means against stored `mean` / `stddev`, emitting WARN beyond two standard deviations and FAIL beyond three. That second line of defense is what makes a scale change observable even if someone loosens YAML without thinking.
 
@@ -89,44 +93,60 @@ I draw a hard line: a **rename** (`confidence` → `confidence_score`) is struct
 
 ## Question 1 — Backward-compatible vs breaking changes (three examples each)
 
-I anchor examples in schemas **I actually enforce** in this repo: Week 3 `extraction_record`, Week 4 `lineage_snapshot`, Week 5 event envelope, and LangSmith `trace_record`. I am **not** claiming Week 1–2 producer contracts here.
+Examples below are tied to **my Weeks 1–5 canonical shapes** (challenge brief) and to **generated contracts** in `generated_contracts/` where enforcement YAML exists.
 
-### Backward-compatible (I can ship without forcing every consumer to change the same day)
+### Backward-compatible (ship without forcing every consumer the same day)
 
-1. **Week 3 extraction_record — new optional top-level field.** If I add `reviewer_notes` as `string` with `required: false`, JSON consumers that ignore unknown keys keep working. My current `week3_extractions.yaml` already follows that pattern for `source_hash` and `extraction_model`: present in schema as optional where the data allows nulls.
+1. **Week 1 `intent_record` — optional top-level string.** Adding `review_notes` (optional) does not invalidate readers that match on `intent_id` and `code_refs[]`. Unknown-key-tolerant consumers keep working.
 
-2. **Week 5 event — new optional key inside `metadata`.** Adding something like `trace_id` under `metadata.properties` with `required: false` does not break readers that only require `correlation_id` and `source_service`. My generated `week5_events.yaml` models `metadata` as an object with explicit `properties` so I can extend additively without rewriting the envelope.
+2. **Week 2 `verdict_record` — optional criterion in `scores`.** Adding a new `scores.new_criterion` object with the same `{ score, evidence, notes }` shape is backward-compatible if downstream only reads a fixed subset of criteria they already know.
 
-3. **LangSmith trace_record — additive enum value with coordinated release.** If I add a sixth `run_type` (e.g. `agent`) **and** update every consumer’s allow-list in the same release window, the change is backward-compatible for systems that treat unknown types as opaque. Today my contract lists `llm`, `chain`, `tool`, `retriever`, `embedding`; widening that set is a contract edit plus dbt `accepted_values` update.
+3. **Week 5 `event_record` — optional key under `metadata`.** `generated_contracts/week5_events.yaml` already lists explicit `metadata.properties`; adding another optional property (e.g. `trace_id`) with `required: false` preserves existing readers that require `correlation_id` and `source_service`.
 
-### Breaking (I need migration, dual-write, or explicit consumer ack)
+### Breaking (migration, dual-write, or explicit consumer ack)
 
-1. **Week 4 lineage_snapshot — remove `snapshot_id` or `git_commit` or break edge endpoint resolution.** The runner checks snapshot identity and 40-hex `git_commit`; graph integrity checks assume `source`/`target` resolve to known `node_id` values. Dropping those invariants breaks both validation and any attributor path that relies on stable node ids.
+1. **Week 1 — empty `code_refs[]`.** The canonical target expects a **non-empty** list tying intent to repository locations; empty arrays break any consumer that assumes at least one `file` / `line_start` / `line_end` / `confidence` reference.
 
-2. **Week 5 event_record — drop `aggregate_id` or `event_id` uniqueness.** Consumers use these for idempotency and stream joins; my contract marks them required and unique where applicable. Removing them without a version bump is breaking.
+2. **Week 4 `lineage_snapshot` — drop `git_commit` or break edge/node alignment.** `generated_contracts/week4_lineage.yaml` enforces **40-hex** `git_commit` and `edges[].source` / `target` resolving to `nodes[].node_id`; violating that breaks `contracts/runner.py` graph integrity checks and `attributor.py`’s linkage to the captured commit.
 
-3. **Week 3 extraction_record — semantic change on `extracted_facts[].confidence`.** Moving from float **0.0–1.0** to integer **0–100** preserves `type: number` in naive typings but breaks thresholds, model features, and analytics. I treat that as breaking in both **range** enforcement and **drift** on `primary_fact_confidence`.
+3. **Week 3 — rescale `extracted_facts[].confidence` from 0.0–1.0 to 0–100.** Still typed as a number but **semantically breaking** for SQL (`WHERE confidence > 0.9`), dashboards, and Week 4 ordering that assume a **unit interval**—detected by `contracts/validation_checks.py` check id **`week3.extracted_facts.confidence.range`** and by drift metrics on **`primary_fact_confidence`** / **`mean_extracted_facts_confidence`** in `schema_snapshots/baselines.json`.
 
 ---
 
-## Question 2 — Confidence 0.0–1.0 → 0–100: failure through Week 4 and the clause I rely on
+## Question 2 — Confidence 0.0–1.0 → 0–100: predicted failure, Week 4 blast radius, and end-to-end enforcement
 
-The Week 4 **Brownfield Cartographer** does not “fix” bad numbers; it **graphs responsibility**. In my integration story, **Week 3 `doc_id` becomes a first-class lineage node identifier** (or ties to table/file nodes that represent the extraction), and **facts attach as metadata** on those nodes or as the annotated context edges reference—so a bad confidence scale is not just a JSON bug; it is a property tied to a **node** that downstream **pipelines** consume. My latest lineage snapshot lives in `outputs/migrate/migrated_lineage_snapshots.jsonl` (one JSON object per file, or final line in JSONL). Nodes are typed (`FILE`, `TABLE`, `PIPELINE`, etc.); edges carry `relationship` values such as `CONSUMES`, `PRODUCES`, `READS`. If extraction output is ingested into a table or pipeline that downstream SQL treats as **unit-interval confidence**, but the producer silently emits **0–100**, then any rule like `WHERE confidence > 0.9` either filters wrong rows or passes junk into a model. The Cartographer’s value is **blast radius**: I inject `lineage.downstream` into `week3_extractions.yaml` (from the graph and/or generator CLI) so I know **which pipeline node ids** to notify when `ViolationAttributor` fires—and **Week 4 is a required input** to that Week 7 component.
+**Failure I predict *before* it lands:** a refinery deploy keeps `confidence` numeric but switches to **percentages (0–100)**. JSON still “looks valid”; naive type checks pass; **business logic silently wrong** (thresholds, ranking, model features). The same pattern exists on **Week 1 `code_refs[].confidence`** and **Week 2 top-level `confidence`** in the canonical brief—Week 3 is where I enforce it hardest because `extracted_facts[]` is what Week 4 indexes.
 
-The **Bitol clause** I actually generate and enforce for the nested field is:
+**Why Week 4 matters:** the Cartographer does not correct values; it **graphs responsibility**. **`doc_id`** and extraction artifacts become **nodes**; **edges** (`CONSUMES`, `PRODUCES`, `READS`, …) show which **pipelines** assumed unit-interval confidence. Bad scale poisons any SQL or scoring built on `> 0.9` semantics. `contract_registry/subscriptions.yaml` records **`breaking_fields: extracted_facts.confidence`** for **`week4-cartographer`**, so registry-aware reporting flags subscriber impact when that field’s meaning shifts.
+
+**End-to-end path (tool-by-tool) after the bad deploy:**
+
+1. **Contract clause (Bitol)** — `schema.extracted_facts.items` still declares **`minimum: 0.0`**, **`maximum: 1.0`** (see excerpt below). No YAML edit was made, so the **promise** is still “unit interval.”
+2. **`contracts/runner.py` (`ValidationRunner`)** — loads `generated_contracts/week3-document-refinery-extractions.yaml` and JSONL from `servers.local.path`; runs **`check_extracted_facts_confidence`** in `contracts/validation_checks.py`.
+3. **Immediate signal** — check id **`week3.extracted_facts.confidence.range`** → **FAIL** when any sample lies outside **[0.0, 1.0]** (e.g. percentages above 1.0), with messaging that calls out the **0–100 vs 0.0–1.0** confusion when values exceed `maximum`.
+4. **Drift layer** — `schema_snapshots/baselines.json` tracks **`primary_fact_confidence`** and **`mean_extracted_facts_confidence`**; a scale jump blows past WARN/FAIL **σ** thresholds even if someone temporarily widened YAML (two lines of defense).
+5. **`contracts/schema_analyzer.py`** — diffs timestamped snapshots under `schema_snapshots/week3-document-refinery-extractions/`; a reckless YAML change to `maximum: 100.0` surfaces as a **breaking** classification in `validation_reports/schema_evolution.json` (producer-side early warning).
+6. **`contracts/attributor.py`** — on FAIL, reverse-graph BFS + git; **`blast_radius.affected_pipelines`** ties to **`lineage.downstream`** on the contract, not merely BFS reachability.
+7. **`contracts/report_generator.py`** — stakeholder **`report_sections`** and **`primary_action`** turn the FAIL into a non-engineering “stop and fix” narrative; **`generation_sources`** proves the report consumed live **`validation_reports/*.json`**.
+
+**Syntactically valid Bitol excerpt** (copied from `generated_contracts/week3-document-refinery-extractions.yaml` under `schema:`):
 
 ```yaml
-extracted_facts:
-  type: array
-  items:
-    confidence:
-      type: number
-      minimum: 0.0
-      maximum: 1.0
-      required: true
+  extracted_facts:
+    type: array
+    description: Facts array; migrated export uses legacy summary fact with confidence.
+    items:
+      confidence:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+        required: true
+      fact_id:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-f-]{36}$
+        required: true
 ```
-
-That lives under `schema` in `generated_contracts/week3_extractions.yaml`. The runner maps it to `week3.extracted_facts.confidence.range` with explicit messaging when values exceed the band. Separately, baselines in `schema_snapshots/baselines.json` mean a scale shift also explodes **drift** on `primary_fact_confidence`—so I am not relying on a single check.
 
 ---
 
@@ -145,11 +165,35 @@ When the runner produces `FAIL`, I optionally invoke `contracts/attributor.py` (
 
 That is the precise graph logic I implemented; it matches the rubric expectation that downstream consumers come from the **contract**, while git attributes code changes.
 
+**Trust boundary (Tier 1 vs what leaves the repo):** validation and lineage traversal run **inside** my repository; git history is read from resolved `file::` paths. Subscribers listed in **`contract_registry/subscriptions.yaml`** model **Tier 2-style** “who must be notified” without exposing the full graph externally.
+
+```mermaid
+sequenceDiagram
+  participant Runner as ValidationRunner
+  participant Report as validation_reports JSON
+  participant Contract as Bitol YAML
+  participant Lineage as Week 4 snapshot JSONL
+  participant Git as git log / blame
+  participant Attrib as ViolationAttributor
+  participant VLog as violation_log JSONL
+  participant Reg as subscriptions.yaml
+  Runner->>Report: write FAIL rows + check_id
+  Runner->>Attrib: optional invoke on FAIL
+  Attrib->>Contract: read lineage.downstream seeds
+  Attrib->>Lineage: load snapshot, build rev adjacency, BFS upstream
+  Attrib->>Git: candidates from resolved file paths
+  Git-->>Attrib: commits + blame hunks
+  Attrib->>Reg: blast_radius uses subscriber-facing downstream ids
+  Attrib->>VLog: append blame_chain + blast_radius
+```
+
 ---
 
-## Question 4 — LangSmith `trace_record` contract (structural, statistical, AI-specific)
+## Question 4 — Week 2 `verdict_record` vs LangSmith `trace_record` (structural, statistical, AI-specific)
 
-I ship a full generated contract as `generated_contracts/langsmith_traces.yaml` with `id: langsmith-trace-record-migrated` and data path `outputs/migrate/migrated_runs.jsonl`. The following excerpt is faithful to what I generate; it shows all three clause classes:
+**Week 2 (canonical `verdict_record`):** structural commitments include **`verdict_id`** UUID, **`overall_verdict`** enum, and **integer 1–5** per **`scores.*.score`**; statistical surface includes **`overall_score`** (weighted mean) and **`confidence` 0.0–1.0**. I do not generate a separate Bitol file for Week 2 in this repo, but the **same three layers** (shape, bounded numbers, evaluation semantics) map directly to what **`ValidationRunner`** would enforce if `outputs/week2/verdicts.jsonl` were wired.
+
+**LangSmith (enforced here):** I ship `generated_contracts/langsmith_traces.yaml` with `id: langsmith-trace-record-migrated` and `servers.local.path: outputs/migrate/migrated_runs.jsonl`. Excerpt below is **valid YAML** and matches the **`schema:`** block in that file (includes required `name`):
 
 ```yaml
 kind: DataContract
@@ -159,6 +203,9 @@ schema:
   id:
     type: string
     format: uuid
+    required: true
+  name:
+    type: string
     required: true
   run_type:
     type: string
@@ -198,18 +245,19 @@ schema:
 
 ---
 
-## Question 5 — Why contract systems fail in production, and how I designed against it
+## Question 5 — Why contract systems fail in production (process, not “bad code”), and how I designed against it
 
-The dominant failure mode I see in industry is **contract rot**: the YAML becomes a snapshot of last quarter’s data while producers evolve weekly. Secondary failures are **structural-only CI** (green builds, wrong science) and **no lineage link** from failure to owning team.
+Most production failures are **process failures**, not mysterious bugs: **nobody regenerated the contract** after the producer changed; **registry rows were never updated** when a new team subscribed; **AUDIT mode stayed on forever** so violations became noise; **lineage snapshots stopped being refreshed** so attribution pointed at stale graphs. The YAML can be perfect and still **rot** if the **deployment checklist** does not tie “schema change” → “generator + runner + registry PR.”
 
-I designed this project to resist that:
+I designed this repo so **disciplined process** has mechanical hooks:
 
-- **Regeneration is first-class:** `contracts/generator.py` profiles migrated JSONL, injects lineage, writes Bitol + dbt, and **always** drops a timestamped schema snapshot for evolution analysis.
-- **Validation is ordered:** Week 3 checks run **structural** predicates first (required fields, pandas type alignment on a flattened extraction frame, enums, UUID pattern, ISO date-time), then **range** and Soda-style quality lines, then **drift** against baselines—so I do not pretend type-passing means semantically safe.
-- **Violations are actionable:** the attributor ties FAIL rows to git history and writes `violation_log/violations.jsonl` with blast radius from the **contract’s** downstream list.
-- **Evolution is audited:** `schema_analyzer.py` diffs snapshots and emits migration impact JSON when I introduce breaking changes.
+- **Regeneration is first-class:** `contracts/generator.py` profiles migrated JSONL, injects lineage, writes Bitol + dbt, and **always** emits a timestamped snapshot under `schema_snapshots/{contract_id}/` for **`contracts/schema_analyzer.py`**.
+- **Validation is ordered:** **structural** checks first (`contracts/runner.py` + `validation_checks.py`), then **range** / quality lines, then **drift** vs `schema_snapshots/baselines.json`—so “typed JSON” cannot masquerade as safe science.
+- **Violations are actionable:** `contracts/attributor.py` writes `violation_log/violations.jsonl` with **ranked** `blame_chain` and **`blast_radius`** aligned to **`lineage.downstream`** and **`contract_registry/subscriptions.yaml`**.
+- **Stakeholder surface:** `contracts/report_generator.py` produces **`report_sections`**, **`primary_action`**, and PDF via **`write_enforcer_pdf`** so failures become **organizational** actions, not log lines.
+- **AI monitoring:** `contracts/ai_extensions.py` adds embedding / prompt / output-rate signals so LLM pipelines fail in **observable** ways, not silent drift.
 
-What still depends on discipline is **running** the generator after real migrations and **resetting baselines** when I intentionally change distributions (`--reset-baselines` on the runner). No tool removes the need for that operational habit.
+What still requires human habit: running the generator after migrations and **`--reset-baselines`** on intentional distribution changes. Tools **encode** the process; they do not **replace** ownership.
 
 ---
 
@@ -225,7 +273,7 @@ I refused to rely on the sentence “confidence is between zero and one” witho
 
 ## Architecture I implemented
 
-The diagram below is the canonical view I use when I explain the system: **migrated JSONL and lineage** enter the generator; **contracts and snapshots** feed the runner and evolution analyzer; **FAIL results** trigger attribution; **report generator and AI extensions** are the explicit forward path I have not finished yet.
+The diagram below is the canonical view I use when I explain the system: **migrated JSONL and lineage** enter the generator; **contracts and snapshots** feed the runner and evolution analyzer; **FAIL results** trigger attribution; **report generator** and **AI extensions** package outcomes for stakeholders and LLM monitoring.
 
 ```mermaid
 flowchart TB
@@ -274,38 +322,38 @@ flowchart TB
     ANA --> MIGR["validation_reports/<br/>migration_impact_*.json"]
   end
 
-  subgraph PL["Planned extensions"]
+  subgraph EXT["AI + stakeholder reporting"]
     direction LR
     AI["contracts/ai_extensions.py"]
-    RG["contracts/report_generator.py<br/>enforcer_report/"]
+    RG["contracts/report_generator.py"]
   end
 
-  REP -.->|future| RG
-  VIO -.->|future| RG
-  MIG -.->|future| AI
+  REP --> RG
+  VIO --> RG
+  MIG --> AI
 
   classDef src fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
   classDef core fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
   classDef out fill:#FFF8E1,stroke:#F9A825,stroke-width:2px,color:#E65100
-  classDef fut fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,stroke-dasharray:6 4,color:#4A148C
+  classDef ext fill:#E8EAF6,stroke:#3949AB,stroke-width:2px,color:#1A237E
   classDef gitn fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#37474F
   class MIG,LIN src
   class GEN,RUN,ATT,ANA core
   class YML,DBT,SSNAP,REP,BL,VIO,EVO,MIGR out
-  class AI,RG fut
+  class AI,RG ext
   class GIT gitn
 ```
 
-**How to read the solid vs dashed edges:** solid arrows are **implemented and wired** in my codebase today. Dashed lines into **AI extensions** and **report generator** mark the **intended** consumption of reports and violations for a stakeholder PDF and richer AI metrics—I have stubs at those paths but not a full pipeline yet.
+**How to read the diagram:** solid arrows are **implemented** paths. **`report_generator`** aggregates validation JSON, optional `schema_evolution.json` / `ai_extensions.json`, and registry context into **`report_sections`** + PDF; **`ai_extensions`** reads extractions + verdicts and writes **`validation_reports/ai_extensions.json`**.
 
 | Component | Role | Key input | Key output |
 |-----------|------|-----------|------------|
-| ContractGenerator | Profile JSONL, optional LLM annotations, lineage injection, Bitol + dbt + schema snapshots | Migrated JSONL, Week 4 lineage | `generated_contracts/*.yaml`, `*_dbt.yml`, `schema_snapshots/...` |
+| ContractGenerator | Profile JSONL, lineage injection, Bitol + dbt + schema snapshots | Migrated JSONL, Week 4 lineage | `generated_contracts/*.yaml`, `*_dbt.yml`, `schema_snapshots/...` |
 | ValidationRunner | Structural, statistical, drift checks; optional attributor | Contract YAML + JSONL snapshot | `validation_reports/*.json` |
 | ViolationAttributor | Upstream BFS + git log/blame + JSONL violations | FAIL report + contract + lineage | `violation_log/violations.jsonl` |
-| SchemaEvolutionAnalyzer | Diff snapshots, classify changes, migration impact | `schema_snapshots/{contract_id}/*.yaml` | `validation_reports/schema_evolution_*.json`, `migration_impact_*.json` |
-| AI Contract Extensions | Extension surface (not fully productized here) | Traces / future embeddings | Placeholder in `contracts/ai_extensions.py` |
-| ReportGenerator | Stakeholder packaging | Violations + reports | Stub in `contracts/report_generator.py`; `enforcer_report/` reserved |
+| SchemaEvolutionAnalyzer | Diff snapshots, classify changes, migration impact | `schema_snapshots/{contract_id}/*.yaml` | `validation_reports/schema_evolution.json`, `migration_impact_*.json` |
+| AI Contract Extensions | Prompt JSON, embedding drift, output violation rate | Extractions + verdicts JSONL | `validation_reports/ai_extensions.json` |
+| ReportGenerator | Stakeholder JSON + PDF | Validation report + auxiliary JSON + registry | `enforcer_report/report_data.json`, PDF (ReportLab) |
 
 ---
 
@@ -323,10 +371,10 @@ flowchart TB
 
 **I recommend completing next (priority order)**
 
-1. **`contracts/report_generator.py` + `enforcer_report/`** — Aggregate `validation_reports/`, `violation_log/`, and future `ai_metrics.json` into `report_data.json` and a PDF for stakeholders; today this is the largest visible gap versus the challenge architecture table.
-2. **`contracts/ai_extensions.py`** — Implement embedding drift and trace-level quality scores (e.g. output JSON schema conformance rate) and write `ai_metrics.json` consumable by the report generator and by a future Week 8 sentinel.
-3. **CI wiring** — One workflow that runs generator (no LLM or with secret), runner on migrated paths, and fails the build on unexpected FAIL; attach the latest `validation_reports/week3_%Y%m%d_%H%M.json` (or equivalent) as an artifact.
-4. **Week 1 / Week 2 in this repo** — Deliberately **not** in my current scope; if the rubric ever requires them in-tree, I would add generators and `outputs/week1|2` data explicitly rather than pretending coverage exists.
-5. **Enum enforcement on nested Week 3 `entities[].type`** — Canonical schema lists six entity types; my runner focuses on extraction envelope and facts; extending checks to entity enums would close a documented gap in the challenge doc.
+1. **CI wiring** — One workflow that runs `contracts/generator.py`, `contracts/runner.py` on migrated paths, optional `report_generator.py`, and fails on unexpected FAIL; attach `validation_reports/week3_YYYYMMDD_HHMM.json` (or equivalent) as an artifact.
+2. **Week 1 / Week 2 Bitol in-tree** — Add `outputs/week1/intent_records.jsonl` and `outputs/week2/verdicts.jsonl` (or symlink), generate `week1_*.yaml` / `week2_*.yaml`, and register subscribers so Weeks 1–5 are enforced uniformly—not only described in DOMAIN_NOTES.
+3. **Enum enforcement on nested Week 3 `entities[].type`** — Canonical schema lists six entity types; extending `validation_checks.py` would close a documented gap.
+4. **Embedding baseline hygiene** — Document OpenAI vs local embedding dimensions for `ai_extensions.py` so drift baselines are not mixed across model changes without `--output-rate-baseline` / reset discipline.
+5. **Tier 2 drill** — Exercise `contract_registry/subscriptions.yaml` in CI (e.g. `report_generator.py --fail-on-registry-gap`) so registry gaps cannot merge silently.
 
 I treat this document as my own architectural narrative: it matches the code and artifacts I actually committed, uses first-person ownership, and separates **proved behavior** (measurements, file paths, check ids) from **intent** (recommendations).
