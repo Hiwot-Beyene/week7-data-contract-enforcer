@@ -7,7 +7,8 @@ plus the Week 4 lineage snapshot for downstream context injection.
 
 Pipeline:
   1. Structural profiling (ydata-profiling + privacy-preserving column shapes)
-  2. Statistical profiling (numeric summaries; confidence 0–1 distribution flags)
+  2. Statistical profiling (numeric summaries; confidence 0–1 distribution flags; malformed rows
+     logged and excluded from baselines where coerced)
   3. Lineage context from latest migrated lineage snapshot
   4. Optional LLM annotations via OpenRouter — **schema metadata only** (no raw row values)
   5. Parallel dbt schema files (Challenge Week 7 Phase 1 Step 5: generated_contracts/{name}_dbt.yml)
@@ -35,6 +36,7 @@ import argparse
 import ast
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -55,6 +57,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
 from contracts.registry_loader import load_registry
+
+logger = logging.getLogger(__name__)
+
+# Log profiling/coercion issues to stderr when generator runs as __main__ (see main()).
 
 GENERATED = REPO_ROOT / "generated_contracts"
 
@@ -80,30 +86,68 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # ---------------------------------------------------------------------------
 
 
-def load_jsonl_records(path: Path) -> List[dict]:
+def load_jsonl_records(path: Path, *, lenient: bool = False) -> List[dict]:
     """
     Load records from JSONL, or a single JSON array/object, or Python-literal lines
     (e.g. single-quoted keys) after strict JSON fails — common for notebook exports.
+
+    With ``lenient=True``, malformed lines are skipped and logged instead of raising;
+    use for profiling so one bad row does not abort the whole generator run.
     """
+    records, _issues = load_jsonl_records_with_issues(path, lenient=lenient)
+    return records
+
+
+def load_jsonl_records_with_issues(
+    path: Path, *, lenient: bool = False
+) -> Tuple[List[dict], List[Dict[str, Any]]]:
+    """
+    Load JSONL-like inputs; return ``(records, issues)``.
+
+    Each issue: ``{"line": int|None, "kind": str, "detail": str}``.
+    In strict mode, raises ``ValueError`` on first unrecoverable line (after logging).
+    """
+    issues: List[Dict[str, Any]] = []
     if not path.is_file():
-        return []
+        return [], issues
+
     raw = path.read_text(encoding="utf-8")
     if raw.startswith("\ufeff"):
         raw = raw[1:]
     text = raw.strip()
     if not text:
-        return []
+        return [], issues
+
+    def _record_issue(line_no: Optional[int], kind: str, detail: str) -> None:
+        rec = {"line": line_no, "kind": kind, "detail": detail[:500]}
+        issues.append(rec)
+        msg = f"{path}"
+        if line_no is not None:
+            msg += f":{line_no}"
+        msg += f" [{kind}] {detail[:300]}"
+        logger.warning("ContractGenerator JSONL: %s", msg)
+
+    out: List[dict] = []
+
     # One JSON document: array of objects or a single object (incl. pretty-printed).
     try:
         data = json.loads(text)
         if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
+            for i, x in enumerate(data):
+                if isinstance(x, dict):
+                    out.append(x)
+                else:
+                    _record_issue(
+                        None,
+                        "skip_non_object_in_array",
+                        f"index {i}: expected object, got {type(x).__name__}",
+                    )
+            return out, issues
         if isinstance(data, dict):
-            return [data]
+            return [data], issues
     except json.JSONDecodeError:
         pass
 
-    out: List[dict] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
         if not line:
@@ -114,21 +158,31 @@ def load_jsonl_records(path: Path) -> List[dict]:
             try:
                 val = ast.literal_eval(line)
             except (ValueError, SyntaxError) as e:
-                raise ValueError(
-                    f"{path}: line {lineno}: not valid JSON/JSONL (or Python dict literal). {e}"
-                ) from e
+                detail = f"not valid JSON/JSONL (or Python dict literal): {e}"
+                if lenient:
+                    _record_issue(lineno, "malformed_line", detail)
+                    continue
+                raise ValueError(f"{path}: line {lineno}: {detail}") from e
         if isinstance(val, dict):
             out.append(val)
         elif isinstance(val, list):
-            for x in val:
+            for j, x in enumerate(val):
                 if isinstance(x, dict):
                     out.append(x)
+                else:
+                    _record_issue(
+                        lineno,
+                        "skip_non_object_in_line_array",
+                        f"element {j}: {type(x).__name__}",
+                    )
         else:
-            raise ValueError(
-                f"{path}: line {lineno}: expected a JSON object or array of objects, "
-                f"got {type(val).__name__}"
-            )
-    return out
+            detail = f"expected object or array of objects, got {type(val).__name__}"
+            if lenient:
+                _record_issue(lineno, "unexpected_line_type", detail)
+                continue
+            raise ValueError(f"{path}: line {lineno}: {detail}")
+
+    return out, issues
 
 
 def utc_now_iso() -> str:
@@ -294,12 +348,36 @@ def structural_column_profiles(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return cols
 
 
-def numeric_stats(series: pd.Series) -> Optional[Dict[str, Any]]:
-    sn = pd.to_numeric(series, errors="coerce").dropna()
+def numeric_stats(series: pd.Series, *, column_label: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Baseline-friendly numeric summaries. Non-numeric cells are coerced with ``errors='coerce'``;
+    coercions are counted and logged so malformed strings cannot silently skew stats.
+    """
+    label = column_label or series.name or "column"
+    sn_all = pd.to_numeric(series, errors="coerce")
+    # Non-null input that became NaN after coerce = unparsable "numeric" garbage
+    mask_junk = series.notna() & sn_all.isna()
+    n_junk = int(mask_junk.sum())
+    if n_junk > 0:
+        logger.warning(
+            "ContractGenerator numeric_stats(%s): dropped %d non-coercible non-null cells before stats",
+            label,
+            n_junk,
+        )
+    sn = sn_all.dropna()
+    inf_mask = (sn == float("inf")) | (sn == float("-inf"))
+    inf_ct = int(inf_mask.sum()) if len(sn) else 0
+    if inf_ct:
+        logger.warning(
+            "ContractGenerator numeric_stats(%s): filtering %d inf/-inf values before quantiles",
+            label,
+            inf_ct,
+        )
+        sn = sn.mask(inf_mask).dropna()
     if sn.empty:
         return None
     stddev = float(sn.std(ddof=0)) if len(sn) > 1 else 0.0
-    return {
+    out: Dict[str, Any] = {
         "min": float(sn.min()),
         "max": float(sn.max()),
         "mean": float(sn.mean()),
@@ -310,12 +388,41 @@ def numeric_stats(series: pd.Series) -> Optional[Dict[str, Any]]:
         "p99": float(sn.quantile(0.99)),
         "stddev": stddev,
     }
+    if n_junk or inf_ct:
+        out["non_numeric_or_non_finite_dropped"] = n_junk + inf_ct
+    return out
 
 
-def confidence_distribution_flags(series: pd.Series) -> Dict[str, Any]:
-    sn = pd.to_numeric(series, errors="coerce").dropna()
+def dataframe_numeric_profile(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+    """Per-column numeric_stats for a frame (coercion-safe; logs junk cells)."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for c in df.columns:
+        ns = numeric_stats(df[c], column_label=str(c))
+        if ns:
+            out[str(c)] = ns
+    return out
+
+
+def confidence_distribution_flags(
+    series: pd.Series, *, column_label: str = "primary_fact_confidence"
+) -> Dict[str, Any]:
+    n_in = int(series.notna().sum())
+    sn = pd.to_numeric(series, errors="coerce")
+    dropped = int((series.notna() & sn.isna()).sum())
+    if dropped:
+        logger.warning(
+            "ContractGenerator confidence_distribution_flags(%s): %d non-null values failed numeric coerce "
+            "(excluded from min/max/mean)",
+            column_label,
+            dropped,
+        )
+    sn = sn.dropna()
     if sn.empty:
-        return {"status": "no_numeric_confidence_samples"}
+        return {
+            "status": "no_numeric_confidence_samples",
+            "non_numeric_non_null_dropped": dropped,
+            "non_null_input_cells": n_in,
+        }
     mn, mx, mean = float(sn.min()), float(sn.max()), float(sn.mean())
     flags: List[str] = []
     if mn < 0.0 or mx > 1.0:
@@ -330,6 +437,8 @@ def confidence_distribution_flags(series: pd.Series) -> Dict[str, Any]:
         "max": mx,
         "mean": mean,
         "flags": flags,
+        "non_numeric_non_null_dropped": dropped,
+        "numeric_sample_count": int(len(sn)),
     }
 
 
@@ -339,7 +448,13 @@ def confidence_distribution_flags(series: pd.Series) -> Dict[str, Any]:
 
 
 def load_lineage_snapshot() -> Optional[dict]:
-    recs = load_jsonl_records(MIGRATED["week4"])
+    recs, issues = load_jsonl_records_with_issues(MIGRATED["week4"], lenient=True)
+    if issues:
+        logger.warning(
+            "ContractGenerator lineage load: %d issue(s) in %s (malformed lines skipped; using last valid record).",
+            len(issues),
+            MIGRATED["week4"],
+        )
     if not recs:
         return None
     return recs[-1]
@@ -490,9 +605,54 @@ def openrouter_annotate_schema(
 # ---------------------------------------------------------------------------
 
 
+def _trim_profiling_issues(issues: List[Dict[str, Any]], cap: int = 32) -> Dict[str, Any]:
+    if not issues:
+        return {"total": 0, "sample": [], "truncated": False}
+    return {"total": len(issues), "sample": issues[:cap], "truncated": len(issues) > cap}
+
+
+def profiling_caveats_week3_records(records: List[dict]) -> List[str]:
+    """Detect row shapes that skew nullability / numeric profiling without crashing."""
+    caveats: List[str] = []
+    if not records:
+        return ["no_records_loaded"]
+    non_list_facts = 0
+    empty_facts = 0
+    bad_ptm = 0
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        ef = r.get("extracted_facts")
+        if ef is None:
+            empty_facts += 1
+        elif not isinstance(ef, list):
+            non_list_facts += 1
+        ptm = r.get("processing_time_ms")
+        if ptm is not None and not isinstance(ptm, (int, float)):
+            bad_ptm += 1
+    if non_list_facts:
+        msg = (
+            f"{non_list_facts} row(s) have extracted_facts that is not a list "
+            "(primary_fact_confidence falls back to null for those rows)"
+        )
+        logger.warning("ContractGenerator week3 profiling: %s", msg)
+        caveats.append(msg)
+    if empty_facts:
+        caveats.append(f"{empty_facts} row(s) have null/missing extracted_facts")
+    if bad_ptm:
+        msg = f"{bad_ptm} row(s) have processing_time_ms not int/float (object dtype / coerce risk)"
+        logger.warning("ContractGenerator week3 profiling: %s", msg)
+        caveats.append(msg)
+    return caveats
+
+
 def df_week3_extractions(records: List[dict]) -> pd.DataFrame:
     rows = []
+    skipped = 0
     for r in records:
+        if not isinstance(r, dict):
+            skipped += 1
+            continue
         facts = r.get("extracted_facts") or []
         conf = None
         if facts and isinstance(facts[0], dict):
@@ -512,6 +672,11 @@ def df_week3_extractions(records: List[dict]) -> pd.DataFrame:
                 "extracted_facts_len": len(facts),
                 "primary_fact_confidence": conf,
             }
+        )
+    if skipped:
+        logger.warning(
+            "ContractGenerator df_week3_extractions: skipped %d non-dict row(s) (not represented in profile frame)",
+            skipped,
         )
     return pd.DataFrame(rows)
 
@@ -548,7 +713,11 @@ def df_week4_lineage(snapshot: dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def df_week5_events(records: List[dict]) -> pd.DataFrame:
     rows = []
+    skipped = 0
     for r in records:
+        if not isinstance(r, dict):
+            skipped += 1
+            continue
         p = r.get("payload") if isinstance(r.get("payload"), dict) else {}
         m = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
         rows.append(
@@ -567,12 +736,21 @@ def df_week5_events(records: List[dict]) -> pd.DataFrame:
                 "payload_key_count": len(p),
             }
         )
+    if skipped:
+        logger.warning(
+            "ContractGenerator df_week5_events: skipped %d non-dict row(s)",
+            skipped,
+        )
     return pd.DataFrame(rows)
 
 
 def df_langsmith_traces(records: List[dict]) -> pd.DataFrame:
     rows = []
+    skipped = 0
     for r in records:
+        if not isinstance(r, dict):
+            skipped += 1
+            continue
         inp = r.get("inputs") if isinstance(r.get("inputs"), dict) else {}
         out = r.get("outputs") if isinstance(r.get("outputs"), dict) else {}
         rows.append(
@@ -592,6 +770,11 @@ def df_langsmith_traces(records: List[dict]) -> pd.DataFrame:
                 "inputs_key_count": len(inp),
                 "outputs_key_count": len(out),
             }
+        )
+    if skipped:
+        logger.warning(
+            "ContractGenerator df_langsmith_traces: skipped %d non-dict row(s)",
+            skipped,
         )
     return pd.DataFrame(rows)
 
@@ -906,18 +1089,46 @@ def profile_column(series: pd.Series, col_name: str) -> Dict[str, Any]:
         "sample_values": [str(v) for v in uniques[:5]],
     }
     if pd.api.types.is_numeric_dtype(series):
-        sn = series.dropna()
-        if len(sn):
+        sn2 = series.dropna()
+        if len(sn2):
             result["stats"] = {
-                "min": float(sn.min()),
-                "max": float(sn.max()),
-                "mean": float(sn.mean()),
-                "p25": float(sn.quantile(0.25)),
-                "p50": float(sn.quantile(0.50)),
-                "p75": float(sn.quantile(0.75)),
-                "p95": float(sn.quantile(0.95)),
-                "p99": float(sn.quantile(0.99)),
-                "stddev": float(sn.std()),
+                "min": float(sn2.min()),
+                "max": float(sn2.max()),
+                "mean": float(sn2.mean()),
+                "p25": float(sn2.quantile(0.25)),
+                "p50": float(sn2.quantile(0.50)),
+                "p75": float(sn2.quantile(0.75)),
+                "p95": float(sn2.quantile(0.95)),
+                "p99": float(sn2.quantile(0.99)),
+                "stddev": float(sn2.std()),
+            }
+    elif str(series.dtype) == "object" and (
+        "confidence" in col_name.lower()
+        or col_name.endswith("_ms")
+        or "sequence" in col_name.lower()
+        or col_name.endswith("_tokens")
+    ):
+        coerced = pd.to_numeric(series, errors="coerce")
+        n_bad = int((series.notna() & coerced.isna()).sum())
+        if n_bad > 0:
+            logger.warning(
+                "ContractGenerator profile_column(%s): %d non-null object cells not numeric-coercible",
+                col_name,
+                n_bad,
+            )
+            result["non_numeric_coerced_away"] = n_bad
+        cn = coerced.dropna()
+        if len(cn):
+            result["stats"] = {
+                "min": float(cn.min()),
+                "max": float(cn.max()),
+                "mean": float(cn.mean()),
+                "p25": float(cn.quantile(0.25)),
+                "p50": float(cn.quantile(0.50)),
+                "p75": float(cn.quantile(0.75)),
+                "p95": float(cn.quantile(0.95)),
+                "p99": float(cn.quantile(0.99)),
+                "stddev": float(cn.std()),
             }
     return result
 
@@ -936,16 +1147,29 @@ def infer_type(dtype_str: str) -> str:
 
 
 def column_to_clause(profile: Dict[str, Any]) -> Dict[str, Any]:
+    null_frac = float(profile.get("null_fraction") or 0.0)
+    uncertain = bool(profile.get("non_numeric_coerced_away"))
+    # Junk strings in an object column can inflate null_fraction after coerce in profile_column stats
+    # but leave raw null_fraction 0; keep required=True only when truly no nulls in the raw series.
     clause: Dict[str, Any] = {
         "type": infer_type(profile["dtype"]),
-        "required": profile["null_fraction"] == 0.0,
+        "required": null_frac == 0.0,
     }
     name = profile["name"]
+    if uncertain:
+        clause["required"] = False
+        clause["description"] = (
+            f"Profiling marked optional because {profile['non_numeric_coerced_away']} cell(s) were not "
+            "numeric-coercible; review upstream types before setting required: true."
+        )
     if "confidence" in name and clause["type"] == "number":
         clause["minimum"] = 0.0
         clause["maximum"] = 1.0
-        clause["description"] = (
+        conf_desc = (
             "Confidence score. Must remain 0.0–1.0 float. BREAKING if changed to 0–100."
+        )
+        clause["description"] = (
+            f"{clause.get('description', '')} {conf_desc}".strip() if clause.get("description") else conf_desc
         )
     if name.endswith("_id"):
         clause["format"] = "uuid"
@@ -1016,8 +1240,19 @@ def run_targeted_extractions_contract(
     openrouter_model: str,
     registry_path: Optional[Path],
 ) -> None:
-    records = load_jsonl_records(source)
-    df = flatten_for_profile(records)
+    records, cli_load_issues = load_jsonl_records_with_issues(source, lenient=True)
+    if cli_load_issues:
+        logger.warning(
+            "ContractGenerator CLI profile: skipped %d malformed JSONL line(s) from %s",
+            len(cli_load_issues),
+            source,
+        )
+    cli_row_caveats = profiling_caveats_week3_records(records)
+    try:
+        df = flatten_for_profile(records)
+    except Exception as exc:
+        logger.exception("ContractGenerator flatten_for_profile failed (%s); empty DataFrame", exc)
+        df = pd.DataFrame()
     contract_violations: List[Dict[str, Any]] = []
     for col in df.columns:
         if "confidence" in col.lower() and str(df[col].dtype) == "object":
@@ -1110,6 +1345,10 @@ def run_targeted_extractions_contract(
                 "ydata_profiling": yprof,
                 "column_profiles": list(column_profiles.values()),
                 "contract_violations": contract_violations,
+                "input_quality": {
+                    "jsonl_load": _trim_profiling_issues(cli_load_issues),
+                    "row_shape_caveats": cli_row_caveats,
+                },
             },
         },
         llm_annotations=llm_annotations,
@@ -1223,12 +1462,27 @@ def main() -> None:
     snapshot = load_lineage_snapshot()
 
     # --- Week 3 ---
-    w3_records = load_jsonl_records(MIGRATED["week3"])
+    w3_records, w3_load_issues = load_jsonl_records_with_issues(MIGRATED["week3"], lenient=True)
+    if w3_load_issues:
+        logger.warning(
+            "ContractGenerator week3: skipped %d malformed JSONL line(s) / fragments at %s",
+            len(w3_load_issues),
+            MIGRATED["week3"],
+        )
+    w3_row_caveats = profiling_caveats_week3_records(w3_records)
     df3 = df_week3_extractions(w3_records)
     structural3 = structural_column_profiles(df3)
     y3 = ydata_profile_summary(df3, "week3_extractions")
-    num3 = {c: numeric_stats(df3[c]) for c in df3.columns if numeric_stats(df3[c])}
-    conf3 = confidence_distribution_flags(df3["primary_fact_confidence"]) if not df3.empty else {}
+    num3 = dataframe_numeric_profile(df3)
+    conf3 = (
+        confidence_distribution_flags(df3["primary_fact_confidence"], column_label="primary_fact_confidence")
+        if not df3.empty and "primary_fact_confidence" in df3.columns
+        else {}
+    )
+    w3_input_quality = {
+        "jsonl_load": _trim_profiling_issues(w3_load_issues),
+        "row_shape_caveats": w3_row_caveats,
+    }
 
     llm3 = {}
     if use_llm:
@@ -1304,7 +1558,13 @@ def main() -> None:
         profiling={
             "engine": "ydata-profiling",
             "generated_at": utc_now_iso(),
-            "structural": {"ydata_profiling": y3, "columns": structural3, "numeric": num3, "confidence_distribution": conf3},
+            "structural": {
+                "ydata_profiling": y3,
+                "columns": structural3,
+                "numeric": num3,
+                "confidence_distribution": conf3,
+                "input_quality": w3_input_quality,
+            },
         },
         llm_annotations=llm3,
     )
@@ -1446,11 +1706,18 @@ def main() -> None:
         )
 
     # --- Week 5 ---
-    w5 = load_jsonl_records(MIGRATED["week5"])
+    w5, w5_load_issues = load_jsonl_records_with_issues(MIGRATED["week5"], lenient=True)
+    if w5_load_issues:
+        logger.warning(
+            "ContractGenerator week5: skipped %d malformed line(s) at %s",
+            len(w5_load_issues),
+            MIGRATED["week5"],
+        )
     df5 = df_week5_events(w5)
     st5 = structural_column_profiles(df5)
     y5 = ydata_profile_summary(df5, "week5_events")
-    num5 = {c: numeric_stats(df5[c]) for c in df5.columns if numeric_stats(df5[c])}
+    num5 = dataframe_numeric_profile(df5)
+    w5_input_quality = {"jsonl_load": _trim_profiling_issues(w5_load_issues)}
     llm5 = {}
     if use_llm:
         amb5 = select_ambiguous_columns(columns_for_llm_schema_only(df5, st5))
@@ -1497,7 +1764,12 @@ def main() -> None:
         profiling={
             "engine": "ydata-profiling",
             "generated_at": utc_now_iso(),
-            "structural": {"ydata_profiling": y5, "columns": st5, "numeric": num5},
+            "structural": {
+                "ydata_profiling": y5,
+                "columns": st5,
+                "numeric": num5,
+                "input_quality": w5_input_quality,
+            },
         },
         llm_annotations=llm5,
     )
@@ -1517,14 +1789,23 @@ def main() -> None:
     )
 
     # --- LangSmith traces (migrated) ---
-    tr = load_jsonl_records(MIGRATED["traces"])
+    tr, tr_load_issues = load_jsonl_records_with_issues(MIGRATED["traces"], lenient=True)
+    if tr_load_issues:
+        logger.warning(
+            "ContractGenerator traces: skipped %d malformed line(s) at %s",
+            len(tr_load_issues),
+            MIGRATED["traces"],
+        )
     dft = df_langsmith_traces(tr)
     stt = structural_column_profiles(dft)
     yt = ydata_profile_summary(dft, "langsmith_traces")
-    numt = {c: numeric_stats(dft[c]) for c in dft.columns if numeric_stats(dft[c])}
+    numt = dataframe_numeric_profile(dft)
     trace_numeric_note = {
-        "outputs_key_count_stats": numeric_stats(dft["outputs_key_count"]) if "outputs_key_count" in dft.columns else None,
+        "outputs_key_count_stats": numeric_stats(dft["outputs_key_count"], column_label="outputs_key_count")
+        if "outputs_key_count" in dft.columns
+        else None,
     }
+    tr_input_quality = {"jsonl_load": _trim_profiling_issues(tr_load_issues)}
     llmt = {}
     if use_llm:
         amb_t = select_ambiguous_columns(columns_for_llm_schema_only(dft, stt))
@@ -1577,6 +1858,7 @@ def main() -> None:
                 "numeric": numt,
                 "trace_shape_notes": trace_numeric_note,
                 "token_fields_nullable_note": "Migrated export may omit timings/tokens pending LangSmith backfill.",
+                "input_quality": tr_input_quality,
             },
         },
         llm_annotations=llmt,
@@ -1605,4 +1887,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(levelname)s %(message)s",
+        stream=sys.stderr,
+        force=True,
+    )
     main()

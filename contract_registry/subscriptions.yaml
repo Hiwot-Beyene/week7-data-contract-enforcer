@@ -1,9 +1,14 @@
-# Contract consumer registry — who depends on which contract fields.
-# contract_id must match the Bitol contract `id` in the validation report.
+# Contract consumer registry — blast radius and subscriber notification context.
+# contract_id must match Bitol ``id`` in validation reports.
+#
+# breaking_fields.field values align with ValidationRunner ``column_name`` (after
+# normalizing [*] segments). Optional ``check_ids`` document the exact runner checks
+# each entry covers for audits.
 
-registry_version: "1.0"
+registry_version: "1.1"
 
 subscriptions:
+  # --- Week 3 extraction_record → Week 4 lineage (platform diagram) ---
   - contract_id: week3-document-refinery-extractions
     subscriber_id: week4-cartographer
     subscriber_team: week4-lineage
@@ -13,20 +18,137 @@ subscriptions:
       - extracted_facts.confidence
       - source_path
       - extracted_at
+      - entities
+      - extraction_model
     breaking_fields:
-      - field: extracted_facts.confidence
-        reason: >-
-          Used for node ranking in the lineage graph; a scale change between 0.0–1.0
-          and 0–100 inverts or corrupts ordering and downstream prioritization.
       - field: doc_id
         reason: >-
-          Primary key for node identity in the lineage graph; format or uniqueness
-          changes break edge resolution and deduplication.
+          Primary graph key; UUID format, uniqueness, and required checks
+          (week3.doc_id.*) must hold or node identity and edges break.
+        check_ids:
+          - week3.doc_id.required
+          - week3.doc_id.format.uuid
+          - week3.doc_id.duplicate_count
+      - field: extracted_facts.confidence
+        reason: >-
+          Range check week3.extracted_facts.confidence.range and drift on
+          mean_extracted_facts_confidence / primary_fact_confidence depend on 0.0–1.0 semantics.
+        check_ids:
+          - week3.extracted_facts.confidence.range
+          - week3.drift.mean_extracted_facts_confidence.drift.mean
+          - week3.quality.primary_fact_confidence.min
+          - week3.quality.primary_fact_confidence.max
+      - field: extracted_facts
+        reason: >-
+          Flatten/profile and enum paths (week3.profile.flatten, pandas_types, enums)
+          target the facts array shape.
+        check_ids:
+          - week3.profile.flatten
+          - week3.fact_confidence.dtype_mixed
+      - field: source_path
+        reason: >-
+          Required source_path clause; failures map to schema.source_path.required.
+        check_ids:
+          - week3.source_path.required
+      - field: extracted_at
+        reason: >-
+          ISO-8601 extracted_at required and format checks.
+        check_ids:
+          - week3.extracted_at.required
+          - week3.extracted_at.format.date-time
+      - field: processing_time_ms
+        reason: >-
+          Integer minimum bound from schema.processing_time_ms.minimum.
+        check_ids:
+          - week3.processing_time_ms.minimum
+      - field: source_hash
+        reason: >-
+          Optional SHA-256 pattern when present (week3.source_hash.pattern).
+        check_ids:
+          - week3.source_hash.pattern
+      - field: entities
+        reason: >-
+          Top-level entities enum/type checks when present in profile frame (week3.<field>.enum).
+        check_ids:
+          - week3.entities.enum
     validation_mode: ENFORCE
     mode_upgraded_at: "2026-04-01T12:00:00Z"
     registered_at: "2026-04-01T12:00:00Z"
     contact: week4-lineage@team.local
 
+  # --- Week 3 → analytics / warehouse (downstream SQL & dbt) ---
+  - contract_id: week3-document-refinery-extractions
+    subscriber_id: week6-warehouse-dbt
+    subscriber_team: week6-analytics
+    fields_consumed:
+      - doc_id
+      - extracted_facts
+      - extracted_facts.confidence
+      - source_path
+      - extracted_at
+    breaking_fields:
+      - field: doc_id
+        reason: >-
+          Warehouse keys and dbt unique/not_null tests follow schema.doc_id.
+        check_ids:
+          - week3.doc_id.required
+          - week3.doc_id.format.uuid
+          - week3.doc_id.duplicate_count
+      - field: extracted_facts.confidence
+        reason: >-
+          Downstream filters (e.g. confidence > 0.9) assume unit-interval scale.
+        check_ids:
+          - week3.extracted_facts.confidence.range
+      - field: extracted_at
+        reason: >-
+          Partitioning and latency SLAs use schema.extracted_at format.
+        check_ids:
+          - week3.extracted_at.required
+          - week3.extracted_at.format.date-time
+    validation_mode: WARN
+    mode_upgraded_at: "2026-04-01T12:00:00Z"
+    registered_at: "2026-04-02T09:00:00Z"
+    contact: week6-analytics@team.local
+
+  # --- Week 3 → Week 7 ValidationRunner / CI (same contract, consumer = enforcer gate) ---
+  - contract_id: week3-document-refinery-extractions
+    subscriber_id: week7-validation-runner
+    subscriber_team: week7-data-contracts
+    fields_consumed:
+      - doc_id
+      - source_path
+      - extracted_at
+      - extracted_facts
+      - processing_time_ms
+      - entities
+      - source_hash
+    breaking_fields:
+      - field: doc_id
+        reason: >-
+          Mirrors all week3.doc_id.* runner checks for gate integrity.
+        check_ids:
+          - week3.doc_id.required
+          - week3.doc_id.format.uuid
+          - week3.doc_id.duplicate_count
+      - field: extracted_facts.confidence
+        reason: >-
+          Statistical and range enforcement on facts confidence.
+        check_ids:
+          - week3.extracted_facts.confidence.range
+          - week3.drift.primary_fact_confidence.drift.mean
+          - week3.drift.mean_extracted_facts_confidence.drift.mean
+      - field: extracted_facts
+        reason: >-
+          Structural flatten and dtype gates on extracted_facts.
+        check_ids:
+          - week3.profile.flatten
+          - week3.fact_confidence.dtype_mixed
+    validation_mode: ENFORCE
+    mode_upgraded_at: "2026-04-01T12:00:00Z"
+    registered_at: "2026-04-02T14:30:00Z"
+    contact: week7-enforcer@team.local
+
+  # --- Week 4 lineage_snapshot → Week 7 attributor ---
   - contract_id: week4-brownfield-lineage-snapshot
     subscriber_id: week7-enforcer
     subscriber_team: week7-data-contracts
@@ -37,19 +159,135 @@ subscriptions:
       - edges
       - codebase_root
     breaking_fields:
+      - field: snapshot_id
+        reason: >-
+          week4.snapshot_id.required binds attribution to a stable snapshot identity.
+        check_ids:
+          - week4.snapshot_id.required
+      - field: git_commit
+        reason: >-
+          week4.git_commit.format requires 40-hex SHA for blame alignment.
+        check_ids:
+          - week4.git_commit.format
       - field: edges
         reason: >-
-          ValidationRunner and ViolationAttributor rely on edge referential integrity;
-          shape or relationship enum changes break upstream traversal and blast radius.
+          week4.edges.endpoints validates source/target against nodes; relationship enums
+          are enforced in the same loop.
+        check_ids:
+          - week4.edges.endpoints
       - field: nodes
         reason: >-
-          Node identifiers seed BFS for attribution; missing or renamed nodes make
-          producer file resolution unreliable.
+          Node ids must exist for every edge endpoint; structural integrity of nodes[].
+        check_ids:
+          - week4.edges.endpoints
+      - field: "*"
+        reason: >-
+          week4.snapshot.exists when JSONL is empty (volume gate on whole snapshot).
+        check_ids:
+          - week4.snapshot.exists
     validation_mode: ENFORCE
     mode_upgraded_at: "2026-04-01T12:00:00Z"
     registered_at: "2026-04-01T12:00:00Z"
     contact: week7-enforcer@team.local
 
+  # --- Week 4 → catalog / metadata mesh (diagram: lineage published to catalog) ---
+  - contract_id: week4-brownfield-lineage-snapshot
+    subscriber_id: week6-data-catalog
+    subscriber_team: week6-metadata
+    fields_consumed:
+      - snapshot_id
+      - git_commit
+      - nodes
+      - edges
+      - codebase_root
+      - captured_at
+    breaking_fields:
+      - field: snapshot_id
+        reason: >-
+          Catalog ingestion keys on snapshot_id for incremental sync.
+        check_ids:
+          - week4.snapshot_id.required
+      - field: nodes
+        reason: >-
+          Node types and labels drive catalog entities.
+        check_ids:
+          - week4.edges.endpoints
+      - field: edges
+        reason: >-
+          Edge relationship vocabulary must stay stable for OpenMetadata-style sync.
+        check_ids:
+          - week4.edges.endpoints
+      - field: git_commit
+        reason: >-
+          Commit pin for lineage freshness in the catalog.
+        check_ids:
+          - week4.git_commit.format
+    validation_mode: WARN
+    mode_upgraded_at: "2026-04-01T12:00:00Z"
+    registered_at: "2026-04-03T10:00:00Z"
+    contact: week6-metadata@team.local
+
+  # --- Week 5 event_record → projections (diagram: event consumers) ---
+  - contract_id: week5-event-sourcing-events
+    subscriber_id: week5-projection-readmodel
+    subscriber_team: week5-event-platform
+    fields_consumed:
+      - event_id
+      - aggregate_id
+      - sequence_number
+      - event_type
+      - payload
+      - metadata.correlation_id
+      - occurred_at
+      - recorded_at
+      - schema_version
+    breaking_fields:
+      - field: event_id
+        reason: >-
+          week5.event_id.required, format.uuid, duplicate_count.
+        check_ids:
+          - week5.event_id.required
+          - week5.event_id.format.uuid
+          - week5.event_id.duplicate_count
+      - field: aggregate_id
+        reason: >-
+          week5.aggregate_id.required and format.uuid; ties to sequence_number.monotonic.
+        check_ids:
+          - week5.aggregate_id.required
+          - week5.aggregate_id.format.uuid
+          - week5.sequence_number.monotonic
+      - field: sequence_number
+        reason: >-
+          week5.sequence_number.monotonic (+1 per aggregate_id).
+        check_ids:
+          - week5.sequence_number.monotonic
+      - field: metadata.correlation_id
+        reason: >-
+          week5.metadata.correlation_id.required and format.uuid.
+        check_ids:
+          - week5.metadata.correlation_id.required
+          - week5.metadata.correlation_id.format
+      - field: recorded_at
+        reason: >-
+          Temporal gate recorded_at >= occurred_at (column_name may list both).
+        check_ids:
+          - week5.recorded_gte_occurred
+      - field: occurred_at
+        reason: >-
+          Pairs with recorded_at for week5.recorded_gte_occurred.
+        check_ids:
+          - week5.recorded_gte_occurred
+      - field: metadata.source_service
+        reason: >-
+          Required nested metadata.source_service when declared in schema.
+        check_ids:
+          - week5.metadata.source_service.required
+    validation_mode: ENFORCE
+    mode_upgraded_at: "2026-04-01T12:00:00Z"
+    registered_at: "2026-04-03T11:30:00Z"
+    contact: week5-projections@team.local
+
+  # --- Week 5 → Week 7 enforcement ---
   - contract_id: week5-event-sourcing-events
     subscriber_id: week7-enforcer
     subscriber_team: week7-data-contracts
@@ -61,25 +299,42 @@ subscriptions:
       - recorded_at
       - metadata.correlation_id
     breaking_fields:
-      - field: sequence_number
-        reason: >-
-          Monotonic per-aggregate ordering is enforced; gaps or type changes break
-          event-sourcing replay assumptions in compliance checks.
       - field: event_id
         reason: >-
-          Deduplication and violation sampling use event_id; identity format changes
-          orphan downstream audit trails.
+          Idempotency and audit sampling in violation reports.
+        check_ids:
+          - week5.event_id.required
+          - week5.event_id.format.uuid
+          - week5.event_id.duplicate_count
+      - field: sequence_number
+        reason: >-
+          Stream replay ordering for compliance checks.
+        check_ids:
+          - week5.sequence_number.monotonic
+      - field: aggregate_id
+        reason: >-
+          Partition key for monotonic sequence validation.
+        check_ids:
+          - week5.aggregate_id.format.uuid
+      - field: recorded_at
+        reason: >-
+          Ordering invariant with occurred_at.
+        check_ids:
+          - week5.recorded_gte_occurred
     validation_mode: WARN
     mode_upgraded_at: "2026-04-01T12:00:00Z"
     registered_at: "2026-04-01T12:00:00Z"
     contact: week7-enforcer@team.local
 
+  # --- LangSmith trace_record → AI governance (Week 7) ---
   - contract_id: langsmith-trace-record-migrated
     subscriber_id: week7-enforcer
     subscriber_team: week7-data-contracts
     fields_consumed:
       - run_type
       - inputs
+      - outputs
+      - session_id
       - start_time
       - end_time
       - total_tokens
@@ -88,13 +343,59 @@ subscriptions:
     breaking_fields:
       - field: run_type
         reason: >-
-          Enum-constrained run classification drives accepted_values checks; new or
-          renamed run types silently skip governance buckets.
+          langsmith.run_type.enum closed set drives governance buckets.
+        check_ids:
+          - langsmith.run_type.enum
       - field: total_tokens
         reason: >-
-          Token arithmetic identity (total vs prompt+completion) is validated; drift
-          here indicates miscounted cost or truncated traces in AI governance reports.
+          langsmith.tokens.sum identity total_tokens = prompt_tokens + completion_tokens.
+        check_ids:
+          - langsmith.tokens.sum
+      - field: end_time
+        reason: >-
+          langsmith.timing.end_after_start when both timestamps present.
+        check_ids:
+          - langsmith.timing.end_after_start
+      - field: inputs
+        reason: >-
+          Bitol schema marks inputs required; keep shape stable for AI extensions and trace replay.
+      - field: outputs
+        reason: >-
+          Bitol schema marks outputs required; downstream output-schema checks assume this envelope.
     validation_mode: AUDIT
     mode_upgraded_at: "2026-03-15T10:00:00Z"
     registered_at: "2026-04-01T12:00:00Z"
     contact: week7-enforcer@team.local
+
+  # --- LangSmith → cost / observability pipeline (diagram: traces to FinOps) ---
+  - contract_id: langsmith-trace-record-migrated
+    subscriber_id: llm-cost-observability
+    subscriber_team: platform-observability
+    fields_consumed:
+      - id
+      - run_type
+      - total_tokens
+      - prompt_tokens
+      - completion_tokens
+      - total_cost
+      - session_id
+    breaking_fields:
+      - field: total_tokens
+        reason: >-
+          Cost attribution assumes tokens.sum identity matches exporter.
+        check_ids:
+          - langsmith.tokens.sum
+      - field: run_type
+        reason: >-
+          Billing segmentation by run_type enum.
+        check_ids:
+          - langsmith.run_type.enum
+      - field: end_time
+        reason: >-
+          Duration metrics use start/end ordering.
+        check_ids:
+          - langsmith.timing.end_after_start
+    validation_mode: AUDIT
+    mode_upgraded_at: "2026-04-01T12:00:00Z"
+    registered_at: "2026-04-04T08:00:00Z"
+    contact: observability@team.local

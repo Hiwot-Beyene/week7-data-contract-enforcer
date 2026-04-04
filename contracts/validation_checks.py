@@ -36,6 +36,145 @@ class CheckResult:
     message: str = ""
 
 
+def make_check_result(
+    check_id: str,
+    *,
+    column_name: str,
+    check_type: str,
+    status: str,
+    actual_value: str,
+    expected: str,
+    severity: str,
+    records_failing: int = 0,
+    sample_failing: Optional[List[str]] = None,
+    message: str = "",
+) -> CheckResult:
+    """Single constructor for :class:`CheckResult` (PASS/FAIL/WARN/ERROR)."""
+    return CheckResult(
+        check_id=check_id,
+        column_name=column_name,
+        check_type=check_type,
+        status=status,
+        actual_value=actual_value,
+        expected=expected,
+        severity=severity,
+        records_failing=records_failing,
+        sample_failing=list(sample_failing or []),
+        message=message,
+    )
+
+
+def make_check_pass(
+    check_id: str,
+    *,
+    column_name: str,
+    check_type: str,
+    expected: str,
+    actual_value: str = "ok",
+    severity: str = "LOW",
+    message: str = "",
+) -> CheckResult:
+    """Standard PASS row (zero failures, empty samples)."""
+    return make_check_result(
+        check_id,
+        column_name=column_name,
+        check_type=check_type,
+        status="PASS",
+        actual_value=actual_value,
+        expected=expected,
+        severity=severity,
+        records_failing=0,
+        sample_failing=[],
+        message=message,
+    )
+
+
+def make_check_fail(
+    check_id: str,
+    *,
+    column_name: str,
+    check_type: str,
+    expected: str,
+    actual_value: str,
+    severity: str = "CRITICAL",
+    records_failing: int = 0,
+    sample_failing: Optional[List[str]] = None,
+    message: str = "",
+) -> CheckResult:
+    """Standard FAIL row."""
+    return make_check_result(
+        check_id,
+        column_name=column_name,
+        check_type=check_type,
+        status="FAIL",
+        actual_value=actual_value,
+        expected=expected,
+        severity=severity,
+        records_failing=records_failing,
+        sample_failing=sample_failing,
+        message=message,
+    )
+
+
+def make_nested_required_result(contract_prefix: str, path: str, missing: int) -> CheckResult:
+    """
+    Required nested field (``schema.foo.bar`` paths) for generic schema + Week 5 metadata loops.
+    """
+    cid = f"{contract_prefix}.{path}.required"
+    if missing:
+        return make_check_fail(
+            cid,
+            column_name=path,
+            check_type="not_null",
+            expected="required",
+            actual_value=f"missing={missing}",
+            records_failing=missing,
+            message=f"Required nested field {path}",
+        )
+    return make_check_pass(
+        cid,
+        column_name=path,
+        check_type="not_null",
+        expected="required",
+        actual_value="missing=0",
+    )
+
+
+def make_nested_uuid_shape_result(
+    contract_prefix: str,
+    path: str,
+    *,
+    bad: int,
+    samples: List[str],
+    has_non_null_values: bool,
+) -> Optional[CheckResult]:
+    """
+    UUID format check for nested ``path`` (generic schema driver).
+    Returns ``None`` when there are no non-null values to validate (no PASS row).
+    """
+    cid = f"{contract_prefix}.{path}.format.uuid"
+    if bad:
+        return make_check_fail(
+            cid,
+            column_name=path,
+            check_type="format",
+            expected="uuid",
+            actual_value=f"invalid={bad}",
+            records_failing=bad,
+            sample_failing=samples,
+            message=f"Field {path!r} must be UUID-shaped.",
+        )
+    if has_non_null_values:
+        return make_check_pass(
+            cid,
+            column_name=path,
+            check_type="format",
+            expected="uuid",
+            actual_value="valid",
+        )
+    return None
+
+
 def _iso_z(ts: str) -> bool:
     if not isinstance(ts, str) or not ts:
         return False
@@ -108,28 +247,22 @@ def check_required_top_level(
             if len(samples) < 5:
                 samples.append(str(rec.get("doc_id") or rec.get("event_id") or rec.get("id") or "row"))
     if missing:
-        return CheckResult(
-            check_id=cid,
+        return make_check_fail(
+            cid,
             column_name=field,
             check_type="not_null",
-            status="FAIL",
-            actual_value=f"missing_count={missing}",
             expected="all non-null",
-            severity="CRITICAL",
+            actual_value=f"missing_count={missing}",
             records_failing=missing,
             sample_failing=samples,
             message=f"Required field {field!r} is null or absent on {missing} record(s).",
         )
-    return CheckResult(
-        check_id=cid,
+    return make_check_pass(
+        cid,
         column_name=field,
         check_type="not_null",
-        status="PASS",
-        actual_value="missing_count=0",
         expected="all non-null",
-        severity="LOW",
-        records_failing=0,
-        message="",
+        actual_value="missing_count=0",
     )
 
 
@@ -153,28 +286,22 @@ def check_unique(
             if len(dup_vals) < 5:
                 dup_vals.append(str(v))
     if dup_vals:
-        return CheckResult(
-            check_id=cid,
+        return make_check_fail(
+            cid,
             column_name=field,
             check_type="unique",
-            status="FAIL",
-            actual_value=f"duplicate_values={dup_vals[:3]}",
             expected="unique",
-            severity="CRITICAL",
+            actual_value=f"duplicate_values={dup_vals[:3]}",
             records_failing=dups,
             sample_failing=dup_vals,
             message=f"Duplicate values for {field!r}.",
         )
-    return CheckResult(
-        check_id=cid,
+    return make_check_pass(
+        cid,
         column_name=field,
         check_type="unique",
-        status="PASS",
-        actual_value="duplicate_count=0",
         expected="unique",
-        severity="LOW",
-        records_failing=0,
-        message="",
+        actual_value="duplicate_count=0",
     )
 
 
@@ -209,28 +336,22 @@ def check_uuid_format(
             if len(samples) < 5:
                 samples.append(str(v)[:64])
     if bad:
-        return CheckResult(
-            check_id=cid,
+        return make_check_fail(
+            cid,
             column_name=field,
             check_type="format",
-            status="FAIL",
-            actual_value=f"invalid_uuid_count={bad}" + (" (100-row sample)" if sampled else ""),
             expected=expected_label,
-            severity="CRITICAL",
+            actual_value=f"invalid_uuid_count={bad}" + (" (100-row sample)" if sampled else ""),
             records_failing=bad,
             sample_failing=samples,
             message=f"Field {field!r} does not match UUID pattern.",
         )
-    return CheckResult(
-        check_id=cid,
+    return make_check_pass(
+        cid,
         column_name=field,
         check_type="format",
-        status="PASS",
-        actual_value="all valid uuid shape" + (" (100-row sample)" if sampled else ""),
         expected="uuid",
-        severity="LOW",
-        records_failing=0,
-        message="",
+        actual_value="all valid uuid shape" + (" (100-row sample)" if sampled else ""),
     )
 
 

@@ -11,6 +11,19 @@ Phase 4 — AI contract extensions: embedding drift, prompt input validation, ou
 Rising output violation rate or drift/prompt WARN/FAIL appends **WARN** rows to
 ``violation_log/violations.jsonl`` when ``--violation-log`` is set (default: repo path).
 
+**Tuning without code edits** (later layers override earlier: defaults, then JSON config file,
+then ``AI_EXTENSIONS_*`` environment variables, then explicit CLI flags):
+
+- JSON: set ``AI_EXTENSIONS_CONFIG`` to a repo-relative or absolute path, or pass ``--config``.
+  Keys: ``embedding_drift_threshold``, ``embedding_min_samples``, ``embedding_baseline_dir``,
+  ``quarantine_path``, ``violation_log_path``, ``output_rate_warn_threshold``,
+  ``output_rate_baseline_path``, ``output_rate_rising_multiplier``, ``output_rate_falling_ratio``.
+- Environment: ``AI_EXTENSIONS_EMBEDDING_DRIFT_THRESHOLD``, ``AI_EXTENSIONS_QUARANTINE_PATH``, etc.
+  (see ``load_ai_extensions_settings``).
+- CLI: ``--embedding-drift-threshold``, ``--quarantine-path``, ``--output-rate-warn-threshold``, …
+
+Effective settings are echoed under ``settings_applied`` in the JSON report.
+
 Usage:
   python contracts/ai_extensions.py \\
     --mode all \\
@@ -32,6 +45,7 @@ import random
 import shutil
 import sys
 import uuid
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -48,6 +62,134 @@ LEGACY_EMBEDDING_NPZ = REPO_ROOT / "schema_snapshots" / "embedding_baselines.npz
 OUTPUT_RATE_BASELINE = "schema_snapshots/ai_output_rate_baseline.json"
 
 RECOMMENDATION_ALLOWED = ("APPROVE", "REFER", "DECLINE")
+
+_ENV_PREFIX = "AI_EXTENSIONS_"
+
+
+@dataclass
+class AIExtensionsSettings:
+    """Runnable thresholds and paths; override via JSON config, env, or CLI."""
+
+    embedding_drift_threshold: float = 0.15
+    embedding_min_samples: int = 10
+    embedding_baseline_dir: str = EMBEDDING_BASELINE_DIR_DEFAULT
+    quarantine_path: str = "outputs/quarantine/"
+    violation_log_path: str = "violation_log/violations.jsonl"
+    output_rate_warn_threshold: float = 0.05
+    output_rate_baseline_path: str = OUTPUT_RATE_BASELINE
+    output_rate_rising_multiplier: float = 1.5
+    output_rate_falling_ratio: float = 0.5
+
+
+def _parse_float_env(raw: str, name: str) -> float:
+    try:
+        return float(raw.strip())
+    except ValueError as e:
+        raise ValueError(f"{name} must be a float, got {raw!r}") from e
+
+
+def _parse_int_env(raw: str, name: str) -> int:
+    try:
+        return int(raw.strip(), 10)
+    except ValueError as e:
+        raise ValueError(f"{name} must be an int, got {raw!r}") from e
+
+
+def _apply_settings_from_mapping(base: AIExtensionsSettings, data: Dict[str, Any]) -> AIExtensionsSettings:
+    allowed = {f.name for f in fields(AIExtensionsSettings)}
+    kwargs: Dict[str, Any] = {}
+    for k, v in data.items():
+        if k not in allowed or v is None:
+            continue
+        if k in (
+            "embedding_drift_threshold",
+            "output_rate_warn_threshold",
+            "output_rate_rising_multiplier",
+            "output_rate_falling_ratio",
+        ):
+            kwargs[k] = float(v)
+        elif k == "embedding_min_samples":
+            kwargs[k] = int(v)
+        else:
+            kwargs[k] = str(v)
+    return replace(base, **kwargs) if kwargs else base
+
+
+def load_ai_extensions_settings(
+    *,
+    config_path: Optional[Path] = None,
+    environ: Optional[Dict[str, str]] = None,
+) -> Tuple[AIExtensionsSettings, Optional[Path]]:
+    """
+    Defaults, then optional JSON file (``AI_EXTENSIONS_CONFIG`` or ``config_path``), then env.
+
+    Environment variables (all optional)::
+
+        AI_EXTENSIONS_CONFIG                          # path to JSON/YAML-like JSON
+        AI_EXTENSIONS_EMBEDDING_DRIFT_THRESHOLD
+        AI_EXTENSIONS_EMBEDDING_MIN_SAMPLES
+        AI_EXTENSIONS_EMBEDDING_BASELINE_DIR
+        AI_EXTENSIONS_QUARANTINE_PATH
+        AI_EXTENSIONS_VIOLATION_LOG_PATH
+        AI_EXTENSIONS_OUTPUT_RATE_WARN_THRESHOLD
+        AI_EXTENSIONS_OUTPUT_RATE_BASELINE_PATH
+        AI_EXTENSIONS_OUTPUT_RATE_RISING_MULTIPLIER
+        AI_EXTENSIONS_OUTPUT_RATE_FALLING_RATIO
+    """
+    env = environ if environ is not None else os.environ
+    s = AIExtensionsSettings()
+    resolved_config_file: Optional[Path] = None
+
+    path_candidate = config_path
+    if path_candidate is None:
+        cfg_raw = (env.get("AI_EXTENSIONS_CONFIG") or "").strip()
+        if cfg_raw:
+            path_candidate = _resolve_path(cfg_raw)
+
+    if path_candidate is not None and path_candidate.is_file():
+        try:
+            raw_txt = path_candidate.read_text(encoding="utf-8")
+            data = json.loads(raw_txt)
+            if isinstance(data, dict):
+                s = _apply_settings_from_mapping(s, data)
+            resolved_config_file = path_candidate.resolve()
+        except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+            raise ValueError(f"Invalid AI extensions config file {path_candidate}: {exc}") from exc
+
+    def gf(key: str) -> Optional[str]:
+        v = env.get(_ENV_PREFIX + key)
+        return v.strip() if isinstance(v, str) and v.strip() else None
+
+    ev = gf("EMBEDDING_DRIFT_THRESHOLD")
+    if ev:
+        s.embedding_drift_threshold = _parse_float_env(ev, "AI_EXTENSIONS_EMBEDDING_DRIFT_THRESHOLD")
+    ev = gf("EMBEDDING_MIN_SAMPLES")
+    if ev:
+        s.embedding_min_samples = _parse_int_env(ev, "AI_EXTENSIONS_EMBEDDING_MIN_SAMPLES")
+    ev = gf("EMBEDDING_BASELINE_DIR")
+    if ev:
+        s.embedding_baseline_dir = ev
+    ev = gf("QUARANTINE_PATH")
+    if ev:
+        s.quarantine_path = ev
+    ev = gf("VIOLATION_LOG_PATH")
+    if ev:
+        s.violation_log_path = ev
+    ev = gf("OUTPUT_RATE_WARN_THRESHOLD")
+    if ev:
+        s.output_rate_warn_threshold = _parse_float_env(ev, "AI_EXTENSIONS_OUTPUT_RATE_WARN_THRESHOLD")
+    ev = gf("OUTPUT_RATE_BASELINE_PATH")
+    if ev:
+        s.output_rate_baseline_path = ev
+    ev = gf("OUTPUT_RATE_RISING_MULTIPLIER")
+    if ev:
+        s.output_rate_rising_multiplier = _parse_float_env(ev, "AI_EXTENSIONS_OUTPUT_RATE_RISING_MULTIPLIER")
+    ev = gf("OUTPUT_RATE_FALLING_RATIO")
+    if ev:
+        s.output_rate_falling_ratio = _parse_float_env(ev, "AI_EXTENSIONS_OUTPUT_RATE_FALLING_RATIO")
+
+    return s, resolved_config_file
+
 
 # Relaxed doc_id for legacy Week 3 hex ids and migrated UUIDs (prompt-input envelope).
 WEEK3_PROMPT_INPUT_SCHEMA: Dict[str, Any] = {
@@ -126,12 +268,19 @@ def check_embedding_drift(
     min_sample_for_baseline: int = 10,
     *,
     backend: str = "auto",
+    settings: Optional[AIExtensionsSettings] = None,
 ) -> dict:
     """
     Compare embedding centroid of a text sample to the latest saved baseline (cosine drift).
 
     ``backend``: ``auto`` (OpenAI if key, else local), ``openai``, or ``local``.
+    If ``settings`` is set, its ``embedding_*`` fields override the explicit arguments.
     """
+    if settings is not None:
+        baseline_dir = settings.embedding_baseline_dir
+        threshold = settings.embedding_drift_threshold
+        min_sample_for_baseline = settings.embedding_min_samples
+
     if len(texts) < min_sample_for_baseline:
         return {
             "status": "INSUFFICIENT_DATA",
@@ -226,10 +375,14 @@ def validate_prompt_inputs(
     records: List[dict],
     schema: dict,
     quarantine_path: str = "outputs/quarantine/",
+    *,
+    settings: Optional[AIExtensionsSettings] = None,
 ) -> dict:
     """
     Validate each record with jsonschema; append failures to quarantine JSONL.
     """
+    if settings is not None:
+        quarantine_path = settings.quarantine_path
     try:
         from jsonschema import Draft7Validator, ValidationError
     except ImportError as e:
@@ -302,6 +455,10 @@ def check_output_violation_rate(
     outputs: List[dict],
     baseline_path: str = OUTPUT_RATE_BASELINE,
     warn_threshold: float = 0.05,
+    rising_multiplier: float = 1.5,
+    falling_ratio: float = 0.5,
+    *,
+    settings: Optional[AIExtensionsSettings] = None,
 ) -> dict:
     """
     Tracks **violation_rate** metric: share of rows whose field value is outside the allow-list.
@@ -309,7 +466,16 @@ def check_output_violation_rate(
     - ``recommendation``: closed world {APPROVE, REFER, DECLINE}.
     - ``event_type``: allow-list is **frozen** on first baseline write from that batch; later
       files with *new* types count as violations (real drift demo across two JSONL exports).
+
+    Trend heuristics: ``rising`` if rate > baseline * ``rising_multiplier`` (when baseline > 0),
+    ``falling`` if rate < baseline * ``falling_ratio``. Override via ``settings``.
     """
+    if settings is not None:
+        baseline_path = settings.output_rate_baseline_path
+        warn_threshold = settings.output_rate_warn_threshold
+        rising_multiplier = settings.output_rate_rising_multiplier
+        falling_ratio = settings.output_rate_falling_ratio
+
     total = len(outputs)
     field, values = _metric_field_and_values(outputs)
     path = _resolve_path(baseline_path)
@@ -371,6 +537,8 @@ def check_output_violation_rate(
             "trend": "baseline_initialized",
             "status": "BASELINE_SET",
             "warn_threshold": warn_threshold,
+            "rising_multiplier": rising_multiplier,
+            "falling_ratio": falling_ratio,
             "message": "Baseline saved. Re-run on a later batch; new event_type values or bad verdicts increase the metric.",
         }
 
@@ -393,9 +561,9 @@ def check_output_violation_rate(
 
     if eff_baseline_f <= 1e-9 and rate > warn_threshold:
         trend = "rising"
-    elif eff_baseline_f > 1e-9 and rate > eff_baseline_f * 1.5:
+    elif eff_baseline_f > 1e-9 and rate > eff_baseline_f * rising_multiplier:
         trend = "rising"
-    elif eff_baseline_f > 1e-9 and rate < eff_baseline_f * 0.5:
+    elif eff_baseline_f > 1e-9 and rate < eff_baseline_f * falling_ratio:
         trend = "falling"
     else:
         trend = "stable"
@@ -422,6 +590,8 @@ def check_output_violation_rate(
         "trend": trend,
         "status": status,
         "warn_threshold": warn_threshold,
+        "rising_multiplier": rising_multiplier,
+        "falling_ratio": falling_ratio,
         "message": (
             "Output schema violation rate elevated or trending up vs baseline — review LLM post-processing or producers."
             if status == "WARN"
@@ -495,24 +665,31 @@ def build_prompt_inputs(records: List[dict]) -> List[dict]:
     return out
 
 
-def run_embedding_check(extractions_path: Path, backend: str = "auto") -> dict:
+def run_embedding_check(
+    extractions_path: Path,
+    backend: str = "auto",
+    settings: Optional[AIExtensionsSettings] = None,
+) -> dict:
     records = load_jsonl(extractions_path)
     texts = extract_embedding_texts(records)
-    return check_embedding_drift(texts, backend=backend)
+    return check_embedding_drift(texts, backend=backend, settings=settings)
 
 
-def run_prompt_check(extractions_path: Path) -> dict:
+def run_prompt_check(
+    extractions_path: Path,
+    settings: Optional[AIExtensionsSettings] = None,
+) -> dict:
     records = load_jsonl(extractions_path)
     prompt_inputs = build_prompt_inputs(records)
-    return validate_prompt_inputs(prompt_inputs, WEEK3_PROMPT_INPUT_SCHEMA)
+    return validate_prompt_inputs(prompt_inputs, WEEK3_PROMPT_INPUT_SCHEMA, settings=settings)
 
 
 def run_output_rate_check(
     verdicts_path: Path,
-    baseline_path: str = OUTPUT_RATE_BASELINE,
+    settings: Optional[AIExtensionsSettings] = None,
 ) -> dict:
     records = load_jsonl(verdicts_path)
-    return check_output_violation_rate(records, baseline_path=baseline_path)
+    return check_output_violation_rate(records, settings=settings)
 
 
 def _should_log_ai_violation(section: dict) -> bool:
@@ -643,8 +820,11 @@ def main() -> None:
     parser.add_argument(
         "--violation-log",
         type=str,
-        default=str(REPO_ROOT / "violation_log" / "violations.jsonl"),
-        help="Append WARN rows for rising output rate / extension failures (JSONL)",
+        default=None,
+        help=(
+            "Append WARN rows for rising output rate / extension failures (JSONL). "
+            "Default: violation_log/violations.jsonl or AI_EXTENSIONS_VIOLATION_LOG_PATH / config."
+        ),
     )
     parser.add_argument(
         "--no-violation-log",
@@ -652,16 +832,97 @@ def main() -> None:
         help="Do not append to violation_log/violations.jsonl",
     )
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help=(
+            "JSON file of settings (embedding_drift_threshold, quarantine_path, …). "
+            "Applied after defaults; env AI_EXTENSIONS_* and CLI flags override file values."
+        ),
+    )
+    parser.add_argument(
+        "--embedding-drift-threshold",
+        type=float,
+        default=None,
+        help="Cosine drift fail threshold (default: 0.15 or config/env)",
+    )
+    parser.add_argument(
+        "--embedding-min-samples",
+        type=int,
+        default=None,
+        help="Minimum texts required for embedding drift / baseline (default: 10)",
+    )
+    parser.add_argument(
+        "--embedding-baseline-dir",
+        type=str,
+        default=None,
+        help="Directory for embedding baseline npz (default: schema_snapshots/embedding_baselines)",
+    )
+    parser.add_argument(
+        "--quarantine-path",
+        type=str,
+        default=None,
+        help="Directory for prompt-validation quarantine JSONL (default: outputs/quarantine/)",
+    )
+    parser.add_argument(
+        "--output-rate-warn-threshold",
+        type=float,
+        default=None,
+        help="Output violation rate above which status can be WARN (default: 0.05)",
+    )
+    parser.add_argument(
+        "--output-rate-rising-multiplier",
+        type=float,
+        default=None,
+        help="Trend rising if current rate > baseline * this (default: 1.5)",
+    )
+    parser.add_argument(
+        "--output-rate-falling-ratio",
+        type=float,
+        default=None,
+        help="Trend falling if current rate < baseline * this (default: 0.5)",
+    )
+    parser.add_argument(
         "--output-rate-baseline",
         type=str,
-        default=OUTPUT_RATE_BASELINE,
-        help="JSON state for output violation-rate baseline (use a separate path for demos)",
+        default=None,
+        help=(
+            "JSON state path for output violation-rate baseline "
+            f"(default: {OUTPUT_RATE_BASELINE} or config/env)"
+        ),
     )
     args = parser.parse_args()
 
+    cfg_cli = _resolve_path(args.config) if args.config else None
+    try:
+        settings, config_loaded_from = load_ai_extensions_settings(config_path=cfg_cli)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.embedding_drift_threshold is not None:
+        settings.embedding_drift_threshold = args.embedding_drift_threshold
+    if args.embedding_min_samples is not None:
+        settings.embedding_min_samples = args.embedding_min_samples
+    if args.embedding_baseline_dir is not None:
+        settings.embedding_baseline_dir = args.embedding_baseline_dir
+    if args.quarantine_path is not None:
+        settings.quarantine_path = args.quarantine_path
+    if args.output_rate_warn_threshold is not None:
+        settings.output_rate_warn_threshold = args.output_rate_warn_threshold
+    if args.output_rate_rising_multiplier is not None:
+        settings.output_rate_rising_multiplier = args.output_rate_rising_multiplier
+    if args.output_rate_falling_ratio is not None:
+        settings.output_rate_falling_ratio = args.output_rate_falling_ratio
+    if args.output_rate_baseline is not None:
+        settings.output_rate_baseline_path = args.output_rate_baseline
+
     mode = args.mode
     out_path = _resolve_path(args.output)
-    vlog = None if args.no_violation_log else _resolve_path(args.violation_log)
+    vlog_resolved = _resolve_path(
+        args.violation_log if args.violation_log is not None else settings.violation_log_path
+    )
+    vlog = None if args.no_violation_log else vlog_resolved
 
     need_ext = mode in ("all", "embedding", "prompt")
     need_ver = mode in ("all", "output_rate")
@@ -682,28 +943,37 @@ def main() -> None:
         "prompt_validation": None,
         "output_violation_rate": None,
         "embedding_backend_requested": args.embedding_backend,
+        "settings_applied": asdict(settings),
+        "settings_config_file": None,
     }
+    if config_loaded_from is not None:
+        try:
+            result["settings_config_file"] = str(
+                config_loaded_from.resolve().relative_to(REPO_ROOT.resolve())
+            )
+        except ValueError:
+            result["settings_config_file"] = str(config_loaded_from.resolve())
 
     if mode in ("all", "embedding"):
         try:
             assert ext_path is not None
-            result["embedding_drift"] = run_embedding_check(ext_path, backend=args.embedding_backend)
+            result["embedding_drift"] = run_embedding_check(
+                ext_path, backend=args.embedding_backend, settings=settings
+            )
         except Exception as e:
             result["embedding_drift"] = {"status": "ERROR", "message": str(e)}
 
     if mode in ("all", "prompt"):
         try:
             assert ext_path is not None
-            result["prompt_validation"] = run_prompt_check(ext_path)
+            result["prompt_validation"] = run_prompt_check(ext_path, settings=settings)
         except Exception as e:
             result["prompt_validation"] = {"status": "ERROR", "message": str(e)}
 
     if mode in ("all", "output_rate"):
         try:
             assert ver_path is not None
-            result["output_violation_rate"] = run_output_rate_check(
-                ver_path, baseline_path=args.output_rate_baseline
-            )
+            result["output_violation_rate"] = run_output_rate_check(ver_path, settings=settings)
         except Exception as e:
             result["output_violation_rate"] = {"status": "ERROR", "message": str(e)}
 

@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+_ARRAY_BRACKET_RE = re.compile(r"\[\*\]")
+
 _SUB_REQUIRED_KEYS = frozenset(
     {
         "contract_id",
@@ -39,6 +41,15 @@ def _as_str(value: Any, field: str, index: int) -> str:
     return value.strip()
 
 
+def _normalize_field_token(raw: str) -> str:
+    """Align ValidationRunner column_name tokens with registry paths (strip [*], spaces)."""
+    s = (raw or "").strip()
+    if not s or s == "*":
+        return s
+    s = _ARRAY_BRACKET_RE.sub("", s)
+    return s.strip(".").strip()
+
+
 def _dot_prefix_match(failing_field: str, breaking_field: str) -> bool:
     """
     True if failing_field equals breaking_field, or either is a dot-prefix of the other
@@ -50,6 +61,27 @@ def _dot_prefix_match(failing_field: str, breaking_field: str) -> bool:
         return True
     if failing_field.startswith(breaking_field + "."):
         return True
+    return False
+
+
+def _field_matches_breaking(failing_field: str, breaking_field: str) -> bool:
+    """
+    Match registry breaking_fields to ValidationRunner ``column_name`` values.
+
+    Handles ``extracted_facts[*].confidence`` vs ``extracted_facts.confidence`` and
+    composite columns like ``recorded_at,occurred_at`` (either side can match).
+    """
+    ff = _normalize_field_token(failing_field)
+    bf = _normalize_field_token(breaking_field)
+    if not ff or ff == "*" or not bf:
+        return False
+    parts = [p.strip() for p in ff.split(",") if p.strip()]
+    if not parts:
+        parts = [ff]
+    for p in parts:
+        pn = _normalize_field_token(p)
+        if _dot_prefix_match(pn, bf) or _dot_prefix_match(bf, pn):
+            return True
     return False
 
 
@@ -238,15 +270,22 @@ def query_blast_radius(registry: dict, contract_id: str, failing_field: str) -> 
         if not isinstance(bfs, list):
             continue
         reason: Optional[str] = None
-        for item in bfs:
-            if not isinstance(item, dict):
-                continue
-            field_path = item.get("field")
-            if not isinstance(field_path, str):
-                continue
-            if _dot_prefix_match(failing_field.strip(), field_path.strip()):
-                reason = str(item.get("reason", "")).strip()
-                break
+        ff_raw = (failing_field or "").strip()
+        volume_style = ff_raw in ("*", "") or ff_raw == "*"
+        if volume_style:
+            first = bfs[0] if bfs and isinstance(bfs[0], dict) else None
+            if isinstance(first, dict):
+                reason = str(first.get("reason", "")).strip()
+        else:
+            for item in bfs:
+                if not isinstance(item, dict):
+                    continue
+                field_path = item.get("field")
+                if not isinstance(field_path, str):
+                    continue
+                if _field_matches_breaking(failing_field, field_path):
+                    reason = str(item.get("reason", "")).strip()
+                    break
         if reason is None:
             continue
         out.append(

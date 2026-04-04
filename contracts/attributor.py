@@ -13,7 +13,8 @@ Usage:
 Or invoked automatically from runner.py when any check is FAIL/WARN/ERROR (unless --no-attributor).
 
 Rubric alignment: writes ``violation_log/violations.jsonl`` entries with **ranked** ``blame_chain``
-(confidence scores, ``git log --follow`` + ``git blame -L --porcelain``), **blast_radius**
+(confidence scores, ``git log --follow`` + ``git blame -L --porcelain``), human-readable
+``blame_top_summaries`` for the top two commits, **blast_radius**
 including ``affected_nodes``, ``affected_pipelines``, and ``estimated_records``, and
 **enforcer-repo fallbacks** so a failing check maps to real commits under this repository
 even when Week 4 ``codebase_root`` points at another clone.
@@ -423,6 +424,8 @@ def append_blame_from_lineage_git_commit(
                 ),
                 4,
             ),
+            "lineage_hop_depth": 0,
+            "attribution_source": "lineage_snapshot_pin",
         }
     )
     return True
@@ -451,6 +454,8 @@ def append_blame_hash_only_from_snapshot(
                 f"{reason} Resolve locally: git -C <clone-from-snapshot> show {sha}"
             ),
             "confidence_score": 0.2,
+            "lineage_hop_depth": 0,
+            "attribution_source": "snapshot_sha_only",
         }
     )
     return True
@@ -483,6 +488,147 @@ def confidence_score(detected_at_iso: str, commit_iso: str, hop_depth: int) -> f
         base = max(0.0, 1.0 - (days_since_commit * 0.1))
     score = base - (hop_depth * 0.2)
     return max(0.0, min(1.0, score))
+
+
+def _commit_days_before_violation(violation_ts: str, commit_iso: str) -> Optional[int]:
+    det = _parse_ts(violation_ts)
+    c_time = _parse_ts(commit_iso) if commit_iso else None
+    if det is None or c_time is None:
+        return None
+    if det.tzinfo is None:
+        det = det.replace(tzinfo=timezone.utc)
+    if c_time.tzinfo is None:
+        c_time = c_time.replace(tzinfo=timezone.utc)
+    return max(0, (det - c_time).days)
+
+
+def human_blame_summary(
+    entry: dict,
+    violation_ts: str,
+    *,
+    next_confidence: Optional[float] = None,
+) -> str:
+    """
+    Plain-language explanation of why this commit appears where it does in the ranked chain.
+
+    Scoring recap: confidence = clamp(recency_base - 0.2 * lineage_hops), with
+    recency_base = max(0, 1 - 0.1 * days(commit → detection)) or 0.35 if commit time unknown.
+    """
+    score = float(entry.get("confidence_score") or 0)
+    fp = str(entry.get("file_path") or "")
+    src = str(entry.get("attribution_source") or "")
+    commit_ts = str(entry.get("commit_timestamp") or "")
+    msg = str(entry.get("commit_message") or "").strip()
+    hops = entry.get("lineage_hop_depth")
+    if hops is None:
+        hops = 0
+    try:
+        hop_i = int(hops)
+    except (TypeError, ValueError):
+        hop_i = 0
+
+    days = _commit_days_before_violation(violation_ts, commit_ts)
+    sentences: List[str] = []
+
+    sentences.append(
+        f"This candidate has confidence {score:.2f} on a 0–1 scale: newer commits score higher, "
+        f"and each upstream lineage hop from the graph seed subtracts 0.20."
+    )
+
+    if days is not None:
+        sentences.append(
+            f"The commit is about {days} day(s) before the violation run timestamp, "
+            f"so the recency part of the score is roughly max(0, 1.0 − 0.1×{days})."
+        )
+    elif commit_ts:
+        sentences.append(
+            "The commit timestamp could not be parsed against the violation time; "
+            "a neutral recency baseline was used in scoring."
+        )
+    else:
+        sentences.append(
+            "No commit timestamp was available; scoring used a low default for recency."
+        )
+
+    if hop_i > 0:
+        sentences.append(
+            f"The touched file is {hop_i} hop(s) upstream of the lineage seeds chosen for this failure, "
+            f"which reduced the score by about {0.2 * hop_i:.1f} versus a seed-adjacent file."
+        )
+    elif src in ("lineage_upstream", "lineage_seed", "enforcer_check_mapping"):
+        sentences.append(
+            "This file was treated as hop distance 0 from the relevant graph seed or check mapping, "
+            "so no lineage hop penalty applied."
+        )
+
+    if src == "lineage_upstream":
+        sentences.append(
+            f"Source: reverse-graph walk from failing-area seeds; git blame on `{fp}` "
+            "surfaces who last owned those lines."
+        )
+    elif src == "lineage_seed":
+        sentences.append(
+            f"Source: a seed node mapped directly to `{fp}` in the lineage codebase, "
+            "so this is a primary producer-side file for the failing contract area."
+        )
+    elif src == "enforcer_check_mapping":
+        sentences.append(
+            f"Source: the failing check id was mapped to `{fp}` in the enforcer repository "
+            "(useful when lineage points at another clone but the validator lives here)."
+        )
+    elif src == "lineage_snapshot_pin":
+        sentences.append(
+            "Source: the Week 4 lineage snapshot's git_commit field — this revision is the "
+            "pinned state of the external codebase when the graph was exported."
+        )
+    elif src == "snapshot_sha_only":
+        sentences.append(
+            "Source: only the snapshot SHA was recorded (no local git repo); "
+            "run `git show <hash>` in the producer clone to inspect the change."
+        )
+    elif "(lineage snapshot git_commit" in fp:
+        sentences.append(
+            "Source: resolved snapshot git_commit from lineage metadata (same intent as a pin)."
+        )
+    elif src == "unresolved_git":
+        sentences.append(
+            "Source: git could not resolve file-level blame candidates; this row is a low-confidence placeholder."
+        )
+
+    if msg and "No git commits resolved" not in msg and not msg.startswith("No git repository"):
+        short = msg[:160] + ("…" if len(msg) > 160 else "")
+        sentences.append(f"Commit subject: «{short}».")
+
+    if next_confidence is not None and score > next_confidence + 0.005:
+        sentences.append(
+            f"It ranks above the next candidate (confidence {next_confidence:.2f}) under this heuristic."
+        )
+
+    return " ".join(sentences)
+
+
+def build_blame_top_summaries(
+    ranked_chain: List[dict],
+    violation_ts: str,
+    *,
+    max_items: int = 2,
+) -> List[dict]:
+    """One or two reader-facing paragraphs for the top-ranked blame candidates."""
+    out: List[dict] = []
+    for i, ent in enumerate(ranked_chain[:max_items]):
+        nxt = None
+        if i + 1 < len(ranked_chain):
+            nxt = float(ranked_chain[i + 1].get("confidence_score") or 0)
+        summary = human_blame_summary(ent, violation_ts, next_confidence=nxt)
+        out.append(
+            {
+                "rank": int(ent.get("rank") or i + 1),
+                "commit_hash": str(ent.get("commit_hash") or "")[:40],
+                "file_path": str(ent.get("file_path") or ""),
+                "summary": summary,
+            }
+        )
+    return out
 
 
 def resolve_git_repository(
@@ -617,6 +763,8 @@ def blame_entry_for_file(
             confidence_score(violation_ts, str(meta.get("commit_timestamp", "")), hop_depth),
             4,
         ),
+        "lineage_hop_depth": int(hop_depth),
+        "attribution_source": source_tag,
         "_source": source_tag,
     }
 
@@ -625,6 +773,7 @@ def rank_and_cap_blame_chain(chain: List[dict], cap: int = 5) -> List[dict]:
     """Highest confidence first; stable tie-breaker on file_path."""
     for c in chain:
         c.pop("_source", None)
+        # Keep attribution_source / lineage_hop_depth for consumers and blame_top_summaries.
     chain.sort(key=lambda x: (-float(x.get("confidence_score") or 0), str(x.get("file_path") or "")))
     out: List[dict] = []
     for i, c in enumerate(chain[:cap], start=1):
@@ -916,6 +1065,8 @@ def run_attribution(
                             "run from the enforcer repo root, and that lineage paths are valid."
                         ),
                         "confidence_score": 0.1,
+                        "lineage_hop_depth": 0,
+                        "attribution_source": "unresolved_git",
                     }
                 )
         else:
@@ -936,10 +1087,13 @@ def run_attribution(
                             "REPO_ROOT_NOT_FOUND and no usable git_commit in lineage snapshot."
                         ),
                         "confidence_score": 0.1,
+                        "lineage_hop_depth": 0,
+                        "attribution_source": "unresolved_git",
                     }
                 )
 
         blame_chain = rank_and_cap_blame_chain(blame_chain, cap=5)
+        blame_top_summaries = build_blame_top_summaries(blame_chain, violation_ts, max_items=2)
 
         # STEP 4 — Write violation log entry (append-only)
         viol: Dict[str, Any] = {
@@ -956,6 +1110,7 @@ def run_attribution(
                 registry_gap=registry_gap,
             ),
             "blame_chain": blame_chain,
+            "blame_top_summaries": blame_top_summaries,
             "records_failing": records_failing,
         }
         if attributor_warnings:

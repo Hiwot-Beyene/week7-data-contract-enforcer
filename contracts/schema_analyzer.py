@@ -4,6 +4,20 @@ SchemaEvolutionAnalyzer (Phase 3) — temporal YAML snapshots under ``schema_sna
 taxonomy-classified diffs, compatibility verdict, migration checklist, rollback plan, and optional
 **explicit snapshot pair** for evaluator reproduction.
 
+**Taxonomy ↔ tooling (for operators):** Each diff row carries a stable ``taxonomy`` code. See
+``TAXONOMY_OPERATOR_GUIDE`` (also emitted as ``taxonomy_tooling_reference`` in JSON reports) for
+how that code usually shows up in **Kafka / Schema Registry-style** registration, **dbt** tests
+and models, and **stream/Flink** expectations. Examples:
+
+- ``add_required_field`` — dbt: new ``not_null`` + backfill before prod; Kafka: additive required
+  columns often fail backward compatibility until all producers emit the field.
+- ``remove_field`` — dbt: ``ref()`` / ``select`` breaks; Kafka: same subject removing a field
+  blocks backward-safe registration until consumers stop reading it.
+- ``enum_value_removed`` — dbt: ``accepted_values`` fails on legacy rows; Kafka: removing an enum
+  symbol is like a breaking schema revision.
+- ``type_change`` / ``range_*_change`` — treat like a narrowing: casts, Serde, and registry checks
+  may all reject in flight.
+
 Usage (auto-pick newest pair in ``--since`` window, else last two snapshots):
 
   python contracts/schema_analyzer.py \\
@@ -53,6 +67,9 @@ CONTRACT_YAML_BY_ID: Dict[str, str] = {
 
 # ---------------------------------------------------------------------------
 # Tool-specific notes (Confluent Schema Registry, dbt, Pact)
+# Each CHANGE_TOOL_MAP key aligns with classify_change ``taxonomy`` where names match
+# (e.g. add_required_field). Codes ``type_change``, ``range_maximum_change``, and
+# ``range_minimum_change`` reuse the ``type_narrowing`` tooling row below.
 # ---------------------------------------------------------------------------
 
 CHANGE_TOOL_MAP: Dict[str, Dict[str, str]] = {
@@ -97,6 +114,88 @@ CHANGE_TOOL_MAP: Dict[str, Dict[str, str]] = {
         "pact": "Consumer pact fails if removed value was in pact",
     },
 }
+
+# ---------------------------------------------------------------------------
+# Operator-facing cookbook: taxonomy code → typical stack behavior.
+# Keys must cover every ``taxonomy`` string emitted by classify_change().
+# ---------------------------------------------------------------------------
+
+TAXONOMY_OPERATOR_GUIDE: Dict[str, Dict[str, str]] = {
+    "add_required_field": {
+        "meaning": "Every record must now carry this field; absent values break consumers written against the old contract.",
+        "kafka_avro_json": "Adding a required property without a default is backward-incompatible for old consumers; use optional-then-required rollout or a new subject/version.",
+        "dbt": "Add nullable column → backfill → then enforce `not_null` / contract test; fail CI if seeds omit the column.",
+        "schema_registry": "Same compatibility class as Confluent BACKWARD blocked: existing readers cannot assume the field exists.",
+    },
+    "add_nullable_field": {
+        "meaning": "New optional field; old producers/consumers may omit it.",
+        "kafka_avro_json": "Purely additive field (optional) is usually backward compatible; bump schema version per your registry policy.",
+        "dbt": "`ALTER TABLE ... ADD COLUMN` nullable; update `sources.yml` / contract YAML; rarely blocks `dbt compile`.",
+        "schema_registry": "Typically allowed under BACKWARD; still notify Flink/SQL consumers that a new attribute may appear.",
+    },
+    "remove_field": {
+        "meaning": "Column/attribute removed from the contract; anything still selecting it fails.",
+        "kafka_avro_json": "Removing a field breaks readers that decode it; use deprecation window, dual schema, or new topic major version.",
+        "dbt": "Downstream `ref()` models fail if they still `select` the column; drop in staging only after lineage is clean.",
+        "schema_registry": "BLOCKED under BACKWARD/FULL until no consumer depends on the field.",
+    },
+    "type_change": {
+        "meaning": "Wire representation changed (e.g. string → number); reinterpretation and Serde errors are likely.",
+        "kafka_avro_json": "Incompatible type swap for the same subject is rejected; may require new topic or compatibility override (discouraged).",
+        "dbt": "Explicit `cast` in staging may fail on legacy strings; add cleansing migration + data-quality test before tightening contract.",
+        "schema_registry": "Equivalent to incompatible evolution—do not auto-register without human review.",
+    },
+    "range_maximum_change": {
+        "meaning": "Upper numeric bound tightened; values that were valid may now violate the contract.",
+        "kafka_avro_json": "If bounds are encoded in schema (Avro/JSON Schema `maximum`), tightening can fail registration or reject in-flight records.",
+        "dbt": "Tighten `accepted_range` / custom test; quarantine or clamp rows above the new max.",
+        "schema_registry": "Treat like narrowing: backward readers may still emit now-illegal values.",
+    },
+    "range_minimum_change": {
+        "meaning": "Lower numeric bound changed; symmetric risk to range_maximum_change.",
+        "kafka_avro_json": "Same as tightening `minimum` in schema-aware pipelines—old producers may still send smaller values.",
+        "dbt": "Adjust minimum checks and fix rows below the new floor before promoting.",
+        "schema_registry": "See range_maximum_change (constraint narrowing).",
+    },
+    "enum_value_removed": {
+        "meaning": "A previously legal enum literal disappeared; pipelines still emitting it will fail validation.",
+        "kafka_avro_json": "Removing enum symbols is backward incompatible; drain producers or dual-write before registration.",
+        "dbt": "Update `accepted_values` and dimension tables; legacy fact rows may fail until backfilled/mapped.",
+        "schema_registry": "BLOCKED for backward compatibility until consumers stop using the removed symbol.",
+    },
+    "enum_value_added": {
+        "meaning": "New allowed categorical value; old code paths usually still work.",
+        "kafka_avro_json": "Adding enum values is often backward compatible; Flink SQL or dbt seeds that enumerate all literals need updating.",
+        "dbt": "Extend `accepted_values` / seed lists; add test row for the new category.",
+        "schema_registry": "Generally permitted; still broadcast to analytics owners.",
+    },
+    "no_material_change": {
+        "meaning": "No clause the analyzer treats as material (ordering/comments drift, etc.).",
+        "kafka_avro_json": "No Kafka subject action implied by this row alone.",
+        "dbt": "No migration triggered from this classification.",
+        "schema_registry": "No registration delta required from this row.",
+    },
+    "classification_error": {
+        "meaning": "Classifier raised; treat as breaking until an engineer confirms.",
+        "kafka_avro_json": "Block automated schema promotion to prod topics.",
+        "dbt": "Hold merge; reproduce diff with explicit `--snapshot-old` / `--snapshot-new`.",
+        "schema_registry": "Manual review only—do not rely on compatibility verdict from this row.",
+    },
+}
+
+
+def operator_tooling_for_taxonomy(taxonomy: str) -> Dict[str, str]:
+    """Narrative hints for a single taxonomy code (Kafka, dbt, registry)."""
+    g = TAXONOMY_OPERATOR_GUIDE.get(taxonomy)
+    if g is not None:
+        return dict(g)
+    return {
+        "meaning": f"Unlisted taxonomy {taxonomy!r}; compare with CHANGE_TOOL_MAP and review manually.",
+        "kafka_avro_json": "Review with platform owners before registering or deploying Serde.",
+        "dbt": "Inspect contract YAML + snapshot diff; add targeted tests.",
+        "schema_registry": "Do not auto-approve.",
+    }
+
 
 _TOOL_NO_MATERIAL: Dict[str, str] = {
     "confluent": "No registration impact for this field",
@@ -177,9 +276,14 @@ def classify_change(
     Classify a single field transition. Rules are evaluated in order; first match wins.
     Returns (verdict, reason, tool_equivalents, taxonomy_category).
 
-    ``taxonomy_category`` is a stable label for rubric/evaluator scripts (maps to CHANGE_TOOL_MAP).
+    ``taxonomy_category`` is a stable label for rubric/evaluator scripts (maps to CHANGE_TOOL_MAP
+    and TAXONOMY_OPERATOR_GUIDE for Kafka/dbt/registry operator notes).
+
+    Taxonomy codes emitted: ``add_required_field``, ``add_nullable_field``, ``remove_field``,
+    ``type_change``, ``range_maximum_change``, ``range_minimum_change``, ``enum_value_removed``,
+    ``enum_value_added``, ``no_material_change`` (plus ``classification_error`` on internal errors).
     """
-    # 1–2: new field
+    # 1–2: new field → taxonomy add_required_field | add_nullable_field
     if old_clause is None and new_clause is not None:
         if _is_required(new_clause):
             return (
@@ -195,7 +299,7 @@ def classify_change(
             "add_nullable_field",
         )
 
-    # 3: removed
+    # 3: removed → taxonomy remove_field (dbt ref()/Kafka field drop)
     if new_clause is None:
         return ("BREAKING", "Field removed", _tool_dict("remove_field"), "remove_field")
 
@@ -203,6 +307,7 @@ def classify_change(
 
     old_t = old_clause.get("type")
     new_t = new_clause.get("type")
+    # Wire type swap → taxonomy type_change (reuse type_narrowing tool map)
     if old_t != new_t:
         return (
             "BREAKING",
@@ -211,6 +316,7 @@ def classify_change(
             "type_change",
         )
 
+    # Numeric cap tightened → taxonomy range_maximum_change (JSON Schema maximum / dbt range tests)
     if _scalar_ne(old_clause.get("maximum"), new_clause.get("maximum")):
         return (
             "BREAKING",
@@ -219,6 +325,7 @@ def classify_change(
             "range_maximum_change",
         )
 
+    # Numeric floor changed → taxonomy range_minimum_change
     if _scalar_ne(old_clause.get("minimum"), new_clause.get("minimum")):
         return (
             "BREAKING",
@@ -227,6 +334,7 @@ def classify_change(
             "range_minimum_change",
         )
 
+    # Enum delta → taxonomy enum_value_removed | enum_value_added (accepted_values / Avro enum)
     os_ = _enum_set(old_clause)
     ns = _enum_set(new_clause)
     if os_ is not None or ns is not None:
@@ -249,6 +357,7 @@ def classify_change(
                 "enum_value_added",
             )
 
+    # No rule matched → taxonomy no_material_change
     return ("COMPATIBLE", "No material change", dict(_TOOL_NO_MATERIAL), "no_material_change")
 
 
@@ -510,6 +619,7 @@ def run_analyzer(
                 "verdict": verdict,
                 "reason": reason,
                 "tool_equivalents": tool_eq,
+                "operator_tooling": operator_tooling_for_taxonomy(taxonomy),
             }
         )
         if verdict == "BREAKING":
@@ -552,8 +662,12 @@ def run_analyzer(
         "compatibility_verdict": compatibility_verdict,
         "schema_registry_style": {
             "backward_readers": confluent_style,
-            "note": "Informal Confluent-style label; see tool_equivalents per change for dbt/Pact.",
+            "note": (
+                "Informal Confluent-style label; each change includes tool_equivalents (dbt/Pact) "
+                "and operator_tooling (Kafka/Avro/JSON Schema + dbt + registry narrative)."
+            ),
         },
+        "taxonomy_tooling_reference": TAXONOMY_OPERATOR_GUIDE,
         "taxonomy_counts": taxonomy_counts,
         "total_changes": len(changes),
         "breaking_count": breaking_count,
@@ -583,6 +697,7 @@ def run_analyzer(
             "compatibility_verdict": compatibility_verdict,
             "snapshot_pair": {"old": path_old.name, "new": path_new.name},
             "breaking_changes": breaking_changes,
+            "taxonomy_tooling_reference": TAXONOMY_OPERATOR_GUIDE,
             "taxonomy_counts": taxonomy_counts,
             "migration_checklist": checklist,
             "rollback_plan": rollback_summary,

@@ -2,7 +2,7 @@
 """
 Stakeholder report: validation summary, top violations with plain-language blurbs,
 registry context, five plain-language ``report_sections``, Data Health Score,
-and programmatic ``generation_sources`` (report_version 2.1).
+and programmatic ``generation_sources`` (report_version 2.2).
 """
 
 from __future__ import annotations
@@ -18,9 +18,101 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-REPORT_VERSION = "2.1"
+REPORT_VERSION = "2.2"
 
 _ARRAY_BRACKET_RE = re.compile(r"\[\*\]")
+
+# Bitol file per contract id (repo-relative paths for report directives).
+CONTRACT_ID_TO_BITOL_RELPATH: Dict[str, str] = {
+    "week3-document-refinery-extractions": "generated_contracts/week3-document-refinery-extractions.yaml",
+    "week4-brownfield-lineage-snapshot": "generated_contracts/week4_lineage.yaml",
+    "week5-event-sourcing-events": "generated_contracts/week5_events.yaml",
+    "langsmith-trace-record-migrated": "generated_contracts/langsmith_traces.yaml",
+}
+
+
+def _schema_clause_for_failure(contract_id: str, check_id: str, column_name: str) -> str:
+    """
+    Map ValidationRunner output to the Bitol ``schema`` / ``quality`` clause path
+    engineers should edit (or the data must satisfy).
+    """
+    cid = (contract_id or "").strip()
+    ck = (check_id or "").lower()
+    col = _normalize_column_name(column_name or "")
+
+    if "extracted_facts.confidence" in ck or (
+        col and "confidence" in col.lower() and "extracted" in col.lower()
+    ):
+        return "schema.extracted_facts.items.confidence (minimum, maximum, required)"
+    if "primary_fact_confidence" in ck or col == "primary_fact_confidence":
+        return (
+            "quality.specification.checks (Soda-style lines for primary_fact_confidence) "
+            "and schema.extracted_facts.items.confidence"
+        )
+    if "mean_extracted_facts_confidence" in ck or "extracted_facts_confidence_mean" in ck:
+        return (
+            "schema.extracted_facts.items.confidence (drift: mean_extracted_facts_confidence "
+            "in schema_snapshots/baselines.json)"
+        )
+    if "drift." in ck and "primary_fact" in ck:
+        return "schema_snapshots/baselines.json (by_contract drift column) + related schema.extracted_facts.items.confidence"
+
+    if ".doc_id." in ck or col == "doc_id":
+        return "schema.doc_id (required, format: uuid, pattern, unique)"
+    if "source_path" in ck or col == "source_path":
+        return "schema.source_path (required)"
+    if "extracted_at" in ck or col == "extracted_at":
+        return "schema.extracted_at (required, format: date-time)"
+    if "processing_time_ms" in ck or col == "processing_time_ms":
+        return "schema.processing_time_ms (minimum, required)"
+    if "source_hash" in ck or col == "source_hash":
+        return "schema.source_hash (pattern, required when present)"
+    if "profile.flatten" in ck or "fact_confidence.dtype" in ck:
+        return "schema.extracted_facts / items shape (JSONL must flatten into profiled columns)"
+    if ".type_match" in ck and "week3." in ck:
+        return "schema.<field> type vs data (see check_id for field name)"
+
+    if cid == "week4-brownfield-lineage-snapshot" or ck.startswith("week4."):
+        if "snapshot_id" in ck or col == "snapshot_id":
+            return "schema.snapshot_id (required, uuid)"
+        if "git_commit" in ck or col == "git_commit":
+            return "schema.git_commit (pattern: 40 hex chars)"
+        if "edges.endpoints" in ck or ("edges" in col.lower() and "source" in col.lower()):
+            return "schema.edges items: source, target, relationship (enum); endpoints must exist in schema.nodes"
+        if "snapshot.exists" in ck or col == "*":
+            return "servers.local.path (non-empty JSONL) — whole-contract volume gate"
+        if "nodes" in col.lower():
+            return "schema.nodes (items.node_id, items.type enum)"
+
+    if cid == "week5-event-sourcing-events" or ck.startswith("week5."):
+        if "sequence_number.monotonic" in ck or col == "sequence_number":
+            return "schema.sequence_number + schema.aggregate_id (cross-record monotonic +1 rule)"
+        if "recorded_gte_occurred" in ck:
+            return "schema.recorded_at and schema.occurred_at (ordering: recorded_at >= occurred_at)"
+        if "correlation_id" in ck:
+            return "schema.metadata.properties.correlation_id (required, uuid)"
+        if "metadata." in ck and "required" in ck:
+            tail = ck.split("week5.", 1)[-1].replace(".required", "") if "week5." in ck else col
+            return f"schema.metadata.properties / nested path `{tail or col}` (required)"
+        if "event_id" in ck or col == "event_id":
+            return "schema.event_id (required, uuid, unique)"
+        if "aggregate_id" in ck or col == "aggregate_id":
+            return "schema.aggregate_id (required, uuid)"
+
+    if cid == "langsmith-trace-record-migrated" or ck.startswith("langsmith."):
+        if "run_type" in ck or col == "run_type":
+            return "schema.run_type (enum: llm|chain|tool|retriever|embedding)"
+        if "tokens.sum" in ck or col == "total_tokens":
+            return "schema.total_tokens, prompt_tokens, completion_tokens (identity: total = prompt + completion)"
+        if "timing" in ck or col in ("end_time", "start_time"):
+            return "schema.start_time / schema.end_time (end after start when both set)"
+
+    if "runner.group" in ck or "runner.exception" in ck:
+        return "see nested check message — underlying schema group named in check_id"
+    if "drift." in ck:
+        return "schema_snapshots/baselines.json drift column referenced in check_id + producing field in schema.*"
+
+    return f"schema.* — locate keys matching column `{col or '?'}` in the Bitol contract"
 
 
 def _repo_path(path: Union[str, Path]) -> Path:
@@ -270,27 +362,37 @@ def _recommended_actions_plain(
     top_failures: List[dict],
     registry_gap_count: int,
 ) -> List[str]:
-    """Action bullets without file paths or CLI jargon (stakeholder-safe)."""
+    """Short directives that still name the Bitol file and clause area (stakeholder-readable)."""
     cid = (contract_id or "").strip() or "this contract"
+    yml = CONTRACT_ID_TO_BITOL_RELPATH.get(
+        cid, f"generated_contracts/{cid}.yaml" if cid != "this contract" else "generated_contracts/<contract>.yaml"
+    )
     actions: List[str] = []
     if registry_gap_count > 0:
         actions.append(
-            "Add or update subscriber entries in the contract registry so teams that consume this data are notified when it changes."
+            f"Add a subscription in contract_registry/subscriptions.yaml for `{cid}` covering each failing "
+            "field so blast radius and breaking_fields stay aligned with ValidationRunner."
         )
+    seen_ck: set[str] = set()
     for r in top_failures:
-        if len(actions) >= 3:
+        if len(actions) >= 5:
             break
         if not isinstance(r, dict):
             continue
-        col = str(r.get("column_name") or "a field")
+        ck = str(r.get("check_id") or "")
+        if not ck or ck in seen_ck:
+            continue
+        seen_ck.add(ck)
+        col = str(r.get("column_name") or "")
+        clause = _schema_clause_for_failure(cid, ck, col)
         actions.append(
-            f"Fix data quality for “{col}” under {cid} so it matches the agreed data rules, then run validation again."
+            f"Check **{ck}**: update data or edit **`{yml}`** at {clause}, then re-run validation."
         )
     while len(actions) < 3:
         actions.append(
-            "When a number’s business meaning changes, refresh your saved comparison snapshots before turning on strict alerts for that field."
+            "When metrics change on purpose, refresh schema_snapshots/baselines.json (or regenerate contracts) before enforcing."
         )
-    return actions[:3]
+    return actions[:5]
 
 
 def _build_report_sections(
@@ -368,30 +470,38 @@ def _recommended_actions(
     registry_gap_count: int,
 ) -> List[str]:
     cid = (contract_id or "").strip() or "unknown-contract"
+    yml_rel = CONTRACT_ID_TO_BITOL_RELPATH.get(cid, f"generated_contracts/{cid}.yaml")
+    yml_abs = REPO_ROOT / yml_rel
     actions: List[str] = []
     if registry_gap_count > 0:
         actions.append(
-            f"Close registry gaps: add or extend breaking_fields in "
-            f"{REPO_ROOT / 'contract_registry' / 'subscriptions.yaml'} "
-            f"(registry_gap_count={registry_gap_count})."
+            f"Registry gap ({registry_gap_count} failing field(s) without subscriber match): extend "
+            f"`contract_registry/subscriptions.yaml` breaking_fields so each column_name from FAIL rows "
+            f"prefix-matches a `field` entry (see contracts/registry_loader._field_matches_breaking)."
         )
+    seen_ck: set[str] = set()
     for r in top_failures:
-        if len(actions) >= 3:
+        if len(actions) >= 5:
             break
         if not isinstance(r, dict):
             continue
         ck = str(r.get("check_id") or "")
+        if not ck or ck in seen_ck:
+            continue
+        seen_ck.add(ck)
         col = str(r.get("column_name") or "")
+        clause = _schema_clause_for_failure(cid, ck, col)
         actions.append(
-            f"Resolve {ck} (column {col!r}): align data with Bitol contract for {cid!r}, "
-            f"then re-run python {REPO_ROOT / 'contracts' / 'runner.py'}."
+            f"Directive [{ck}] column={col!r}: modify `{yml_abs}` clause **{clause}** "
+            f"or fix JSONL at servers.local.path declared in that YAML; then "
+            f"`python contracts/runner.py` for contract `{cid}`."
         )
     while len(actions) < 3:
         actions.append(
-            f"Keep numeric baselines under {REPO_ROOT / 'schema_snapshots'}; "
-            "use AUDIT mode until baselines exist, then promote to WARN/ENFORCE."
+            f"Maintain drift baselines under `{REPO_ROOT / 'schema_snapshots' / 'baselines.json'}`; "
+            "use AUDIT until baselines stabilize, then WARN/ENFORCE."
         )
-    return actions[:3]
+    return actions[:5]
 
 
 def _failures_sorted(results: List[dict]) -> List[dict]:

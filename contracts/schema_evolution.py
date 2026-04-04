@@ -1,6 +1,9 @@
 """
 Shared schema snapshot I/O and normalization for ContractGenerator + SchemaEvolutionAnalyzer.
 
+Operator-facing taxonomy notes (Kafka / dbt / Schema Registry) live in
+``schema_analyzer.TAXONOMY_OPERATOR_GUIDE`` and are copied into evolution JSON reports.
+
 Temporal snapshots live under ``schema_snapshots/{contract_id}/{UTC}.yaml`` (see
 ``write_contract_schema_snapshot``). Diff two files with::
 

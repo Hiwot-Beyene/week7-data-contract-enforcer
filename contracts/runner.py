@@ -55,6 +55,11 @@ from contracts.validation_checks import (
     contract_prefix_from_id,
     flatten_extractions_for_profile,
     get_nested,
+    make_check_fail,
+    make_check_pass,
+    make_check_result,
+    make_nested_required_result,
+    make_nested_uuid_shape_result,
     mean_extracted_facts_confidence,
     parse_quality_soda_line,
     primary_fact_confidence,
@@ -642,36 +647,7 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
         path = f"metadata.{sub}"
         if sspec.get("required"):
             missing = sum(1 for r in records if _get_nested(r, path) is None)
-            cid = f"{prefix}.{path}.required"
-            if missing:
-                results.append(
-                    CheckResult(
-                        check_id=cid,
-                        column_name=path,
-                        check_type="not_null",
-                        status="FAIL",
-                        actual_value=f"missing={missing}",
-                        expected="required",
-                        severity="CRITICAL",
-                        records_failing=missing,
-                        sample_failing=[],
-                        message=f"Required nested field {path}",
-                    )
-                )
-            else:
-                results.append(
-                    CheckResult(
-                        check_id=cid,
-                        column_name=path,
-                        check_type="not_null",
-                        status="PASS",
-                        actual_value="missing=0",
-                        expected="required",
-                        severity="LOW",
-                        records_failing=0,
-                        message="",
-                    )
-                )
+            results.append(make_nested_required_result(prefix, path, missing))
         if sub == "correlation_id" and sspec.get("format") == "uuid":
 
             def corr(r):
@@ -694,14 +670,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
             cid = f"{prefix}.metadata.correlation_id.format"
             if bad:
                 results.append(
-                    CheckResult(
-                        check_id=cid,
+                    make_check_fail(
+                        cid,
                         column_name="metadata.correlation_id",
                         check_type="format",
-                        status="FAIL",
-                        actual_value=f"invalid={bad}",
                         expected="uuid",
-                        severity="CRITICAL",
+                        actual_value=f"invalid={bad}",
                         records_failing=bad,
                         sample_failing=samples,
                         message="correlation_id must be UUID-shaped string.",
@@ -709,16 +683,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
                 )
             else:
                 results.append(
-                    CheckResult(
-                        check_id=cid,
+                    make_check_pass(
+                        cid,
                         column_name="metadata.correlation_id",
                         check_type="format",
-                        status="PASS",
-                        actual_value="valid",
                         expected="uuid",
-                        severity="LOW",
-                        records_failing=0,
-                        message="",
+                        actual_value="valid",
                     )
                 )
 
@@ -749,14 +719,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
     cid = f"{prefix}.recorded_gte_occurred"
     if bad_ts:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_fail(
+                cid,
                 column_name="recorded_at,occurred_at",
                 check_type="temporal",
-                status="FAIL",
-                actual_value=f"violations={bad_ts}",
                 expected="recorded_at >= occurred_at",
-                severity="CRITICAL",
+                actual_value=f"violations={bad_ts}",
                 records_failing=bad_ts,
                 sample_failing=samples_ts,
                 message="Event ordering: recorded_at before occurred_at.",
@@ -764,16 +732,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
         )
     else:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_pass(
+                cid,
                 column_name="recorded_at,occurred_at",
                 check_type="temporal",
-                status="PASS",
-                actual_value="ok",
                 expected="recorded_at >= occurred_at",
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="ok",
             )
         )
 
@@ -802,14 +766,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
     cid = f"{prefix}.sequence_number.monotonic"
     if bad_seq:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_fail(
+                cid,
                 column_name="sequence_number",
                 check_type="sequence",
-                status="FAIL",
-                actual_value=f"non_monotonic_instances={bad_seq}",
                 expected="strict +1 per aggregate_id",
-                severity="CRITICAL",
+                actual_value=f"non_monotonic_instances={bad_seq}",
                 records_failing=bad_seq,
                 sample_failing=sample_seq,
                 message="sequence_number must increase by 1 per aggregate with no gaps.",
@@ -817,16 +779,12 @@ def checks_week5(contract: dict, records: List[dict], prefix: str) -> List[Check
         )
     else:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_pass(
+                cid,
                 column_name="sequence_number",
                 check_type="sequence",
-                status="PASS",
-                actual_value="monotonic",
                 expected="+1 per aggregate",
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="monotonic",
             )
         )
 
@@ -837,15 +795,12 @@ def checks_week4_lineage(contract: dict, records: List[dict], prefix: str) -> Li
     results: List[CheckResult] = []
     if not records:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.snapshot.exists",
+            make_check_fail(
+                f"{prefix}.snapshot.exists",
                 column_name="*",
                 check_type="volume",
-                status="FAIL",
-                actual_value="row_count=0",
                 expected=">=1 snapshot",
-                severity="CRITICAL",
-                records_failing=0,
+                actual_value="row_count=0",
                 message="No lineage snapshot rows.",
             )
         )
@@ -859,59 +814,47 @@ def checks_week4_lineage(contract: dict, records: List[dict], prefix: str) -> Li
 
     if not sid:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.snapshot_id.required",
+            make_check_fail(
+                f"{prefix}.snapshot_id.required",
                 column_name="snapshot_id",
                 check_type="not_null",
-                status="FAIL",
-                actual_value="null",
                 expected="uuid",
-                severity="CRITICAL",
+                actual_value="null",
                 records_failing=1,
                 message="snapshot_id missing",
             )
         )
     else:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.snapshot_id.required",
+            make_check_pass(
+                f"{prefix}.snapshot_id.required",
                 column_name="snapshot_id",
                 check_type="not_null",
-                status="PASS",
-                actual_value="present",
                 expected="uuid",
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="present",
             )
         )
 
     if not gc or not re.fullmatch(r"[a-f0-9]{40}", str(gc), re.I):
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.git_commit.format",
+            make_check_fail(
+                f"{prefix}.git_commit.format",
                 column_name="git_commit",
                 check_type="pattern",
-                status="FAIL",
-                actual_value=str(gc)[:20],
                 expected="40 hex chars",
-                severity="CRITICAL",
+                actual_value=str(gc)[:20],
                 records_failing=1,
                 message="git_commit must be 40-char SHA",
             )
         )
     else:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.git_commit.format",
+            make_check_pass(
+                f"{prefix}.git_commit.format",
                 column_name="git_commit",
                 check_type="pattern",
-                status="PASS",
-                actual_value="40 hex",
                 expected="40 hex",
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="40 hex",
             )
         )
 
@@ -931,14 +874,12 @@ def checks_week4_lineage(contract: dict, records: List[dict], prefix: str) -> Li
     cid = f"{prefix}.edges.endpoints"
     if bad_edges:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_fail(
+                cid,
                 column_name="edges[*].source,target",
                 check_type="referential",
-                status="FAIL",
-                actual_value=f"invalid_edges={bad_edges}",
                 expected="source,target in nodes",
-                severity="CRITICAL",
+                actual_value=f"invalid_edges={bad_edges}",
                 records_failing=bad_edges,
                 sample_failing=samples,
                 message="Edge endpoints must resolve to node_id set.",
@@ -946,16 +887,12 @@ def checks_week4_lineage(contract: dict, records: List[dict], prefix: str) -> Li
         )
     else:
         results.append(
-            CheckResult(
-                check_id=cid,
+            make_check_pass(
+                cid,
                 column_name="edges[*].source,target",
                 check_type="referential",
-                status="PASS",
-                actual_value="all resolve",
                 expected="nodes",
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="all resolve",
             )
         )
 
@@ -976,14 +913,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
                 samples_rt.append(str(r.get("id", "")))
     if bad_rt:
         results.append(
-            CheckResult(
-                check_id=cid_rt,
+            make_check_fail(
+                cid_rt,
                 column_name="run_type",
                 check_type="accepted_values",
-                status="FAIL",
-                actual_value=f"invalid_count={bad_rt}",
                 expected=str(sorted(allowed)),
-                severity="CRITICAL",
+                actual_value=f"invalid_count={bad_rt}",
                 records_failing=bad_rt,
                 sample_failing=samples_rt,
                 message="run_type must be enum value.",
@@ -991,16 +926,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
         )
     elif records:
         results.append(
-            CheckResult(
-                check_id=cid_rt,
+            make_check_pass(
+                cid_rt,
                 column_name="run_type",
                 check_type="accepted_values",
-                status="PASS",
-                actual_value="valid",
                 expected=str(sorted(allowed)),
-                severity="LOW",
-                records_failing=0,
-                message="",
+                actual_value="valid",
             )
         )
 
@@ -1011,14 +942,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
         # loose string compare if parse fails
         if str(st) >= str(en) and st and en:
             results.append(
-                CheckResult(
-                    check_id=f"{prefix}.timing.end_after_start",
+                make_check_fail(
+                    f"{prefix}.timing.end_after_start",
                     column_name="end_time",
                     check_type="temporal",
-                    status="FAIL",
-                    actual_value=f"start={st}, end={en}",
                     expected="end_time > start_time",
-                    severity="CRITICAL",
+                    actual_value=f"start={st}, end={en}",
                     records_failing=1,
                     sample_failing=[str(r.get("id", ""))],
                     message="end_time must be after start_time when both set.",
@@ -1028,16 +957,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
     else:
         if any(r.get("start_time") and r.get("end_time") for r in records):
             results.append(
-                CheckResult(
-                    check_id=f"{prefix}.timing.end_after_start",
+                make_check_pass(
+                    f"{prefix}.timing.end_after_start",
                     column_name="end_time",
                     check_type="temporal",
-                    status="PASS",
-                    actual_value="ok",
                     expected="end > start",
-                    severity="LOW",
-                    records_failing=0,
-                    message="",
+                    actual_value="ok",
                 )
             )
 
@@ -1048,14 +973,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
         try:
             if int(tt) != int(pt) + int(ct):
                 results.append(
-                    CheckResult(
-                        check_id=f"{prefix}.tokens.sum",
+                    make_check_fail(
+                        f"{prefix}.tokens.sum",
                         column_name="total_tokens",
                         check_type="arithmetic",
-                        status="FAIL",
-                        actual_value=f"total={tt}, prompt+completion={int(pt)+int(ct)}",
                         expected="total_tokens = prompt_tokens + completion_tokens",
-                        severity="CRITICAL",
+                        actual_value=f"total={tt}, prompt+completion={int(pt)+int(ct)}",
                         records_failing=1,
                         sample_failing=[str(r.get("id", ""))],
                         message="Token identity check failed.",
@@ -1072,16 +995,12 @@ def checks_langsmith(contract: dict, records: List[dict], prefix: str) -> List[C
             for r in records
         ):
             results.append(
-                CheckResult(
-                    check_id=f"{prefix}.tokens.sum",
+                make_check_pass(
+                    f"{prefix}.tokens.sum",
                     column_name="total_tokens",
                     check_type="arithmetic",
-                    status="PASS",
-                    actual_value="consistent",
                     expected="sum",
-                    severity="LOW",
-                    records_failing=0,
-                    message="",
+                    actual_value="consistent",
                 )
             )
 
@@ -1100,15 +1019,14 @@ def checks_generic_schema(contract: dict, records: List[dict], prefix: str) -> L
     schema = contract.get("schema") or {}
     if not records:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.data.empty",
+            make_check_result(
+                f"{prefix}.data.empty",
                 column_name="*",
                 check_type="volume",
                 status="WARN",
                 actual_value="row_count=0",
                 expected=">=1 record",
                 severity="WARNING",
-                records_failing=0,
                 message="No records in dataset.",
             )
         )
@@ -1126,36 +1044,7 @@ def checks_generic_schema(contract: dict, records: List[dict], prefix: str) -> L
                 path = f"{field}.{sub}"
                 if sspec.get("required"):
                     missing = sum(1 for r in records if get_nested(r, path) is None)
-                    cid = f"{prefix}.{path}.required"
-                    if missing:
-                        results.append(
-                            CheckResult(
-                                check_id=cid,
-                                column_name=path,
-                                check_type="not_null",
-                                status="FAIL",
-                                actual_value=f"missing={missing}",
-                                expected="required",
-                                severity="CRITICAL",
-                                records_failing=missing,
-                                sample_failing=[],
-                                message=f"Required nested field {path}",
-                            )
-                        )
-                    else:
-                        results.append(
-                            CheckResult(
-                                check_id=cid,
-                                column_name=path,
-                                check_type="not_null",
-                                status="PASS",
-                                actual_value="missing=0",
-                                expected="required",
-                                severity="LOW",
-                                records_failing=0,
-                                message="",
-                            )
-                        )
+                    results.append(make_nested_required_result(prefix, path, missing))
                 if sspec.get("format") == "uuid":
                     bad = 0
                     samples: List[str] = []
@@ -1167,36 +1056,17 @@ def checks_generic_schema(contract: dict, records: List[dict], prefix: str) -> L
                             bad += 1
                             if len(samples) < 5:
                                 samples.append(str(v)[:40])
-                    cid = f"{prefix}.{path}.format.uuid"
-                    if bad:
-                        results.append(
-                            CheckResult(
-                                check_id=cid,
-                                column_name=path,
-                                check_type="format",
-                                status="FAIL",
-                                actual_value=f"invalid={bad}",
-                                expected="uuid",
-                                severity="CRITICAL",
-                                records_failing=bad,
-                                sample_failing=samples,
-                                message=f"Field {path!r} must be UUID-shaped.",
-                            )
-                        )
-                    elif any(get_nested(r, path) is not None for r in records):
-                        results.append(
-                            CheckResult(
-                                check_id=cid,
-                                column_name=path,
-                                check_type="format",
-                                status="PASS",
-                                actual_value="valid",
-                                expected="uuid",
-                                severity="LOW",
-                                records_failing=0,
-                                message="",
-                            )
-                        )
+                    nu = make_nested_uuid_shape_result(
+                        prefix,
+                        path,
+                        bad=bad,
+                        samples=samples,
+                        has_non_null_values=any(
+                            get_nested(r, path) is not None for r in records
+                        ),
+                    )
+                    if nu is not None:
+                        results.append(nu)
             continue
         if stype == "array":
             continue
@@ -1233,15 +1103,12 @@ def checks_generic_schema(contract: dict, records: List[dict], prefix: str) -> L
 
     if not results:
         results.append(
-            CheckResult(
-                check_id=f"{prefix}.generic.summary",
+            make_check_pass(
+                f"{prefix}.generic.summary",
                 column_name="*",
                 check_type="structural",
-                status="PASS",
-                actual_value="ok",
                 expected="generic schema checks",
-                severity="LOW",
-                records_failing=0,
+                actual_value="ok",
                 message="No schema constraints beyond data presence.",
             )
         )
@@ -1262,15 +1129,14 @@ def run_checks(contract: dict, records: List[dict]) -> List[CheckResult]:
         return checks_langsmith(contract, records, prefix)
     if "lineage-missing" in cid or cid.endswith("-placeholder"):
         return [
-            CheckResult(
-                check_id=f"{prefix}.contract.placeholder",
+            make_check_result(
+                f"{prefix}.contract.placeholder",
                 column_name="*",
                 check_type="config",
                 status="ERROR",
                 actual_value=cid,
                 expected="generated snapshot contract",
                 severity="WARNING",
-                records_failing=0,
                 message="Placeholder or missing-data contract; run ContractGenerator after migrations.",
             )
         ]
